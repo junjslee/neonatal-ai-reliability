@@ -1,0 +1,84 @@
+### https://hub.docker.com/r/pytorch/pytorch/tags
+FROM pytorch/pytorch:2.5.1-cuda11.8-cudnn9-devel
+
+ARG PYTHON_VERSION=3.12.7
+ARG USER_NAME=junlee652
+
+ENV USER_NAME=${USER_NAME}
+MAINTAINER ${USER_NAME}
+
+# Set timezone
+ENV TZ=Asia/Seoul
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+
+# Set proxy
+ENV HTTP_PROXY=http://192.168.45.108:3128
+ENV HTTPS_PROXY=http://192.168.45.108:3128
+
+# Update and install system dependencies
+# RUN apt-get update -y --allow-unauthenticated
+RUN apt-get update -y && apt-get upgrade -y && \
+    apt-get install -y apt-utils libgl1-mesa-glx openslide-tools libgtk2.0-dev libxext6 libxrender-dev python-tk libglib2.0-0 libsm6 libxrender1 libfontconfig1 dcm2niix vim
+# to skip build error for timezone
+RUN apt-get install -y sudo vim 
+# python3-pip --> Docker image like pytorch/pytorch:1.13.1-cuda11.6-cudnn8-devel already has pip installed
+
+# Create necessary directories and set workdir
+RUN mkdir -p /workspace
+RUN mkdir -p /.local
+RUN mkdir -p /.local/bin
+WORKDIR /
+
+# Ensure PyTorch and torchaudio versions align with your base image
+RUN pip install torch==2.5.1 torchvision==0.20.1
+
+# Install additional packages in alphabetical order
+# version specification remoted: pytorch lightening (2.5.1) torchvision 0.20.1 
+RUN pip install \
+    albumentations==1.4.3 \
+    gpustat \
+    grad-cam \
+    imutils \
+    ipywidgets \
+    kornia==0.7.0 \
+    libauc==1.3.0 \
+    librosa==0.10.1 \
+    livelossplot==0.5.5 \
+    lifelines \
+    medpy \
+    monai==1.3.0 \
+    natsort==8.4.0 \
+    neurokit2==0.2.7 \
+    numpy==1.26.0 \
+    opencv-python==4.8.0.76 \
+    openpyxl \
+    openslide-python \
+    pandas==2.2.3 \
+    peft \
+    plotly \
+    pillow \
+    pydicom \
+    "pydicom[gdcm]" \
+    pylibjpeg \
+    pylibjpeg-libjpeg \
+    pylibjpeg-openjpeg \
+    pyyaml \
+    pytorch-gradcam \
+    pytorch-lightning \
+    python-pptx \
+    pycox \
+    scikit-image \
+    scikit-learn==1.3.2 \
+    scikit-survival \
+    scikit-posthocs \
+    scipy==1.11.2 \
+    shap \
+    seaborn \
+    segmentation-models-pytorch==0.4.0 \
+    scikit-survival \
+    tiatoolbox \
+    torchmetrics \
+    tqdm \
+    transformers \
+    totalsegmentator
