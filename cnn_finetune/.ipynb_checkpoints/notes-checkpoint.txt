@@ -1,0 +1,24 @@
+Adaquate BUT Make sure to Review:
+- external_lateral_dataset.py
+
+
+Good to go:
+- optim.py
+- lateral_dataset.py
+- model.py
+- config.py
+- losses.py
+- utils.py
+- train.py
+- gradcam.py
+- test.py
+
+
+RUNNING ARGUMENTS (Example):
+TRAINING
+python /workspace/jun/nec_lat/cnn_classification/cnn_code/train.py --version [version] --gamma_truefalse --gamma_min 80 --gamma_max 120 --gamma_percentage 0.5 --size 1024 --batch 6 --gpu 5 --rotate_angle 30 --rotate_percentage 0.8 --layers densenet169 --epoch 180 --clip_min 0.5 --clip_max 98.5 --rbc_brightness 0.05 --rbc_contrast 0.2 --elastic_truefalse --elastic_alpha 0.75 --elastic_sigma 15 --elastic_alpha_affine 0.45 --elastic_percentage 0.25 --gaussian_truefalse --gaussian_min 0 --gaussian_max 10 --gaussian_percentage 0.5 
+
+INTERNAL INFERENCE (TEST)
+python /workspace/jun/nec_lat/cnn_classification/cnn_code/train.py --version [version] --gamma_truefalse --gamma_min 80 --gamma_max 120 --gamma_percentage 0.5 --size 1024 --batch 6 --gpu 5 --rotate_angle 30 --rotate_percentage 0.8 --layers densenet169 --epoch 180 --clip_min 0.5 --clip_max 98.5 --rbc_brightness 0.05 --rbc_contrast 0.2 --elastic_truefalse --elastic_alpha 0.75 --elastic_sigma 15 --elastic_alpha_affine 0.45 --elastic_percentage 0.25 --gaussian_truefalse --gaussian_min 0 --gaussian_max 10 --gaussian_percentage 0.5 --inference
+
+EXTERNAL INFERENCE (TEST)

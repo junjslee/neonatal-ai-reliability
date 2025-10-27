@@ -1,0 +1,404 @@
+GPU Information:
+Number of GPUs: 1
+GPU Names: NVIDIA TITAN RTX
+
+Total Params: 87772929
+Total LoRA params: 995328 --> 995328 / 87772929 (1.13%)
+
+The rest are classification_head params: 197121
+Efficiency & Parameter Metrics:
+Total Parameters:          87.77M
+Trainable Parameters (LoRA only): 1.192M
+AUC per Million Total Params:     0.0109
+AUC per Million Trainable Params: 0.8002
+Average Inference Latency:         37.18 ms/image
+Peak GPU Memory Usage:             460.87 MB
+
+Model Performance Metrics:
+YOUDEN THRESHOLD METRICS (threshold = 0.3724):
+Classification Report:
+              precision    recall  f1-score   support
+
+ True Non-PP       0.96      0.90      0.93        71
+     True PP       0.85      0.93      0.89        43
+
+    accuracy                           0.91       114
+   macro avg       0.90      0.92      0.91       114
+weighted avg       0.92      0.91      0.91       114
+
+Accuracy: 0.9123, 95% CI: (0.8460, 0.9517)
+Sensitivity: 0.9302, 95% CI: (0.8139, 0.9760)
+Specificity: 0.9014, 95% CI: (0.8102, 0.9514)
+
+SENSITIVITY-OPTIMIZED METRICS (threshold = 0.6036):
+Classification Report:
+              precision    recall  f1-score   support
+
+ True Non-PP       0.94      0.92      0.93        71
+     True PP       0.87      0.91      0.89        43
+
+    accuracy                           0.91       114
+   macro avg       0.90      0.91      0.91       114
+weighted avg       0.91      0.91      0.91       114
+
+Accuracy: 0.9123, 95% CI: (0.8460, 0.9517)
+Sensitivity: 0.9070, 95% CI: (0.7840, 0.9632)
+Specificity: 0.9155, 95% CI: (0.8276, 0.9607)
+
+ROC curve (area = 0.9541, 95% CI: 0.9111-0.9869)
+
+False Positives:
+1031138261.1.2.png
+1431064618.1.2.png
+1531092468.1.1.png
+1531092534.1.1.png
+1531092597.1.1.png
+1731051508.1.2.png
+1731052347.1.1.png
+
+False Negatives:
+0531013794.1.1.png
+0531039183.1.2.png
+0731058233.1.1.png
+
+ png_name: 0531013794.1.1.png
+  Accuracy: 0.0
+
+ png_name: 0531038752.1.4.png
+  Accuracy: 1.0
+
+ png_name: 0531038867.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0531038948.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0531039047.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0531039081.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0531039183.1.2.png
+  Accuracy: 0.0
+
+ png_name: 0531039225.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0531039319.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0731029214.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0731057791.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0731057802.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0731057960.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0731058006.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0731058233.1.1.png
+  Accuracy: 0.0
+
+ png_name: 0731060541.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0731060621.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0831037578.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0831037611.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0831037656.1.3.png
+  Accuracy: 1.0
+
+ png_name: 0831037679.1.1.png
+  Accuracy: 1.0
+
+ png_name: 0831037834.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0831037944.1.2.png
+  Accuracy: 1.0
+
+ png_name: 0831038532.1.3.png
+  Accuracy: 1.0
+
+ png_name: 0931100996.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1031039459.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1031132816.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1031132886.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031132965.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031133100.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1031133138.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031133318.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031133482.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031133600.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031133746.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031133951.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1031134023.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031135900.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1031138261.1.2.png
+  Accuracy: 0.0
+
+ png_name: 1131104897.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1231004600.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1431063787.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1431064168.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1431064618.1.2.png
+  Accuracy: 0.0
+
+ png_name: 1531092468.1.1.png
+  Accuracy: 0.0
+
+ png_name: 1531092534.1.1.png
+  Accuracy: 0.0
+
+ png_name: 1531092597.1.1.png
+  Accuracy: 0.0
+
+ png_name: 1631078569.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1631083193.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1631083242.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1631107302.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1631107659.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731047265.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731047827.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731047996.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731048488.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731048581.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731049104.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731049123.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731049701.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731049959.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731050062.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731050335.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731050427.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731050933.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731051508.1.2.png
+  Accuracy: 0.0
+
+ png_name: 1731051765.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731051799.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731052194.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731052348.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731052804.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731053052.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731053646.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731055056.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1731055282.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731055796.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731055974.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731056425.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731057084.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731057863.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1731058792.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1731060437.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731060843.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731052347.1.1.png
+  Accuracy: 0.0
+
+ png_name: 1731053054.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731145438.1.2.png
+  Accuracy: 1.0
+
+ png_name: 1731145946.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731154137.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731182997.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731183306.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731183430.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731183572.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731183635.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731183825.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184056.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184244.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184305.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184490.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184711.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184882.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731184948.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185128.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185262.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185329.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185394.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185566.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185664.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731185800.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1731186342.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1831017299.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1831188838.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1831189029.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1831189659.1.1.png
+  Accuracy: 1.0
+
+ png_name: 1831189742.1.1.png
+  Accuracy: 1.0

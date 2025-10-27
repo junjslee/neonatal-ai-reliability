@@ -1,0 +1,28 @@
+Threshold (Youden): 0.5740
+
+Model: microsoft/rad-dino
+Total parameters:           86,580,480
+Trainable parameters:       86,580,480
+Model size (parameters):    330.28 MB
+
+Accuracy:    0.6161 (95% CI: 0.5236–0.7009)
+Sensitivity: 0.3333 (95% CI: 0.2168–0.4746)
+Specificity: 0.8281 (95% CI: 0.7179–0.9012)
+ROC AUC:     0.6475 (95% CI: 0.5410–0.7534)
+
+Classification Report (zero_division=0):
+              precision    recall  f1-score   support
+
+           0     0.6235    0.8281    0.7114        64
+           1     0.5926    0.3333    0.4267        48
+
+    accuracy                         0.6161       112
+   macro avg     0.6081    0.5807    0.5690       112
+weighted avg     0.6103    0.6161    0.5894       112
+
+
+Efficiency Metrics:
+AUC per million total params:     0.0075
+AUC per million trainable params: 0.0075
+Avg inference latency:            31.71 ms/image
+Peak GPU memory usage:            402.44 MB
