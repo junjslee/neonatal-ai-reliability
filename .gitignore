@@ -1,0 +1,18 @@
+/_archive/
+/figures/
+/reader_study_ui
+
+# *.png
+# *.jpg
+*.csv
+*.docx
+*.txt
+*.xlsx
+.DS_Store
+.ipynb_checkpoints
+/reader_study_ui/result/
+/rad_dino_finetune/rad_dino_finetune/comment-checkpoint.txt
+
+# /reader_study_ui/reader_study_ui/final_reader_study_UI_prep_for_LJS.csv
+# /reader_study_ui/reader_study_ui/reader_study_ui/reader_study_UI_prep_for_LJS_07012025.csv
+# /reader_study_ui/reader_study_ui/reader_study_ui/reader_study_ui/reader_study_UI_prep_for_LJS_07012025.csv
