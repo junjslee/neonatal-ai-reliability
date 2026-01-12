@@ -4,6 +4,7 @@
 
 # *.png
 # *.jpg
+*.npz
 *.csv
 *.docx
 *.txt

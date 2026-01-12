@@ -1,0 +1,21 @@
+{
+  "path": "workspace/yeonsu/0.Projects/Pneumoperitoneum/data/external_data/External5.csv",
+  "gpu": "1",
+  "external": true,
+  "version": "FINAL_BIASEDAIv2",
+  "size": 518,
+  "pretrained_weight": "workspace/jun/nec_lat/rad_dino/results/vBIAS_experiment_final_inferenceF_batch6_epoch50_useLoRATrue_loraR12_loraAlpha24_loraMLPT_unfreezeAllF_edgeAugF_customBatchT_NVIDIA_RTX_A6000/weights/v88_20250513_141958_SBATCHfrom_srun_0_inferenceF_batch6_epoch50_useLoRATrue_loraR12_loraAlpha24_loraMLPT_unfreezeAllF_edgeAugF_customBatchT_NVIDIA_RTX_A6000_lora_best",
+  "seed": 42,
+  "include_segmentation": false,
+  "use_lora": true,
+  "lora_r": 12,
+  "lora_alpha": 24,
+  "use_peft": false,
+  "apply_mlp_lora": true,
+  "unfreeze_all": false,
+  "make_reader_study_cam": true,
+  "flipped_orientation_during_training": true,
+  "job_id": "59539",
+  "job_array": "1",
+  "model_threshold": 0.2535
+}

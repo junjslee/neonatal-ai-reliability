@@ -29,7 +29,7 @@ except ImportError:
 
 import rdino_config
 import rdino_utils
-from rdino_gradcam import generate_gradcam_visualizations_test, generate_eigencam_visualizations_test, generate_vit_reciprocam_visualizations_test, generate_scorecam_visualizations_test
+from rdino_gradcam import generate_vit_reciprocam_visualizations_test
 from rdino_losses import ClassificationLoss
 import rdino_model
 from rdino_external_dataset import RADDINO_ExternalLateralDataset
@@ -61,26 +61,16 @@ def main():
         freeze = True
         
     # Create Model
-    if args.use_peft:
-        model = rdino_model.RADDINOPeft_Model(
-            n_classes=1, # train_dataset.num_classes
-            use_peft=True,
-            r=args.lora_r,
-            apply_mlp_lora=args.apply_mlp_lora,
-            include_segmentation=args.include_segmentation,
-            img_dim=(args.size, args.size)
-        )
-    else:
-        model = rdino_model.RADDINO_Model(
-            n_classes=1,
-            use_lora=args.use_lora,
-            r=args.lora_r,
-            alpha=args.lora_alpha,
-            apply_mlp_lora=args.apply_mlp_lora,
-            freeze_encoder=freeze,
-            include_segmentation=args.include_segmentation,
-            img_dim=(args.size, args.size)
-        )
+    model = rdino_model.RADDINO_Model(
+        n_classes=1,
+        use_lora=args.use_lora,
+        r=args.lora_r,
+        alpha=args.lora_alpha,
+        apply_mlp_lora=args.apply_mlp_lora,
+        freeze_encoder=freeze,
+        include_segmentation=args.include_segmentation,
+        img_dim=(args.size, args.size)
+    )
 
     
     # Multi-GPU support

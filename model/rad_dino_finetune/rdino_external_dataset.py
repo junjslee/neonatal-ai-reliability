@@ -10,11 +10,6 @@ import pandas as pd # Import pandas for type hint
 
 
 class RADDINO_ExternalLateralDataset(Dataset):
-    """
-    Custom Dataset for classification using PNG images from an EXTERNAL source.
-    Expects a DataFrame with columns: 'png_path', 'Binary_Label', and 'Orientation'.
-    Deterministically flips images with 'L' orientation to 'R' before other transforms.
-    """
     def __init__(self, df: pd.DataFrame, args, training=False):
         # *** CHANGE: Check for required columns ***
         required_cols = ['png_path', 'Binary_Label', 'Orientation']

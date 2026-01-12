@@ -70,130 +70,6 @@ def process_gradcam_batch(model, inputs, grad_cam, DEVICE, threshold, rounding_p
         'visualization_g': visualization_g
     }
 
-####################################### GradCAM ###########################################
-def create_gradcam(model, DEVICE):
-    # Wrap the model if not already wrapped.
-    model.to(DEVICE)
-    model.eval()
-
-    # If model is wrapped in DataParallel, get the underlying model.
-    if hasattr(model, "module"):
-        base_model = model.module
-    else:
-        base_model = model
-
-    # Our RADDINO_Model stores the backbone under "rad_dino".
-    # Wrap the final norm1 layer of the last encoder layer.
-    if hasattr(base_model, "rad_dino"):
-        target_layer = [base_model.rad_dino.encoder.layer[-1].norm1]
-        # target_layers = [model.rad_dino.encoder.layer[-1].norm1]
-    else:
-        raise AttributeError("Model does not have attribute 'rad_dino'")
-
-    print("#########Target Layer of RADDINO for GradCAM#########")
-    print(target_layer)
-
-    # Create and return the GradCAM instance.
-    return GradCAM(model=model, target_layers=target_layer, reshape_transform=reshape_transform)
-
-def generate_gradcam_visualizations_test(model, test_loader, DEVICE, threshold, save_dir):
-    """
-    Generate and save Grad-CAM visualizations for testing.
-    """
-    grad_cam = create_gradcam(model, DEVICE)
-    
-    # Ensure the grad-CAM output directory exists.
-    gradcam_dir = os.path.join(save_dir, "gradcam")
-    if not os.path.exists(gradcam_dir):
-        os.makedirs(gradcam_dir, exist_ok=True)
-    
-    for i, data in enumerate(test_loader):
-        inputs = data['image']
-        png_path = data['png_name']
-
-        # get ground truth label from the batch & convert ground-truth value to human-readable string.
-        actual_label_val = data['label'][0].item() if torch.is_tensor(data['label'][0]) else data['label'][0]
-        actual_label = 'Pneumoperitoneum' if int(actual_label_val) == 1 else 'Non Pneumoperitoneum'
-
-        outputs = process_gradcam_batch(model, inputs, grad_cam, DEVICE, threshold, rounding_precision=4)
-        
-        # Determine predicted class label.
-        clspred = 'Pneumoperitoneum' if int(outputs['cls_pred_bin'].item()) == 1 else 'Non Pneumoperitoneum'
-        
-        plt.figure(figsize=(7,7), dpi=114.1)
-        plt.imshow(outputs['visualization_g'])
-        plt.axis('off')
-        plt.title(f"Predicted: {clspred}\nActual: {actual_label}\nLikelihood: {outputs['cls_pred_rounded']}   Threshold: {threshold:.4f}", fontsize=17)
-        
-        file_name = f"{png_path[0].split('.')[0]}_gradcam.png"
-        plt.savefig(os.path.join(gradcam_dir, file_name), bbox_inches='tight', pad_inches=0.15)
-        plt.close()
-    print("Grad-CAM visualizations saved successfully!")
-
-############################# EigenCAM #######################################
-def create_eigencam(model, DEVICE):
-    # Wrap the model if not already wrapped
-    model.to(DEVICE)
-    model.eval()
-
-    # If model is wrapped in DataParallel, get the underlying model
-    if hasattr(model, "module"):
-        base_model = model.module
-    else:
-        base_model = model
-
-    # Target the final norm1 layer of the last encoder layer
-    if hasattr(base_model, "rad_dino"):
-        target_layer = [base_model.rad_dino.encoder.layer[-1].norm1]
-    else:
-        raise AttributeError("Model does not have attribute 'rad_dino'")
-
-    print("#########Target Layer of RADDINO for EigenCAM#########")
-    print(target_layer)
-
-    # Create and return the EigenCAM instance
-    eigen_cam = EigenCAM(
-        model=model, 
-        target_layers=target_layer, 
-        reshape_transform=reshape_transform
-    )
-    
-    return eigen_cam
-
-def generate_eigencam_visualizations_test(model, test_loader, DEVICE, threshold, save_dir):
-    """
-    Generate and save EigenCAM visualizations for testing.
-    """
-    eigen_cam = create_eigencam(model, DEVICE)
-    
-    # Ensure the output directory exists
-    eigencam_dir = os.path.join(save_dir, "eigencam")
-    if not os.path.exists(eigencam_dir):
-        os.makedirs(eigencam_dir, exist_ok=True)
-
-    for i, data in enumerate(test_loader):
-        inputs = data['image']
-        png_path = data['png_name']
-
-        # get ground truth label from the batch & convert ground-truth value to human-readable string.
-        actual_label_val = data['label'][0].item() if torch.is_tensor(data['label'][0]) else data['label'][0]
-        actual_label = 'Pneumoperitoneum' if int(actual_label_val) == 1 else 'Non Pneumoperitoneum'
-
-        outputs = process_gradcam_batch(model, inputs, eigen_cam, DEVICE, threshold, rounding_precision=4)
-        
-        # Determine predicted class label.
-        clspred = 'Pneumoperitoneum' if int(outputs['cls_pred_bin'].item()) == 1 else 'Non Pneumoperitoneum'
-        
-        plt.figure(figsize=(7,7), dpi=114.1)
-        plt.imshow(outputs['visualization_g'])
-        plt.axis('off')
-        plt.title(f"Predicted: {clspred}\nActual: {actual_label}\nLikelihood: {outputs['cls_pred_rounded']}   Threshold: {threshold}", fontsize=17)
-        
-        file_name = f"{png_path[0].split('.')[0]}_eigencam.png"
-        plt.savefig(os.path.join(eigencam_dir, file_name), bbox_inches='tight', pad_inches=0.15)
-        plt.close()
-    print("EigenCAM visualizations saved successfully!")
-
 ############################# ViT-ReciproCAM #################################
 class ViTReciproCAM:
     """
@@ -686,6 +562,132 @@ def generate_scorecam_visualizations_test(model, test_loader, DEVICE, threshold,
         plt.close()
     
     print("Score-CAM visualizations saved successfully!")
+
+
+##### MISC ############################################################################
+####################################### GradCAM ###########################################
+def create_gradcam(model, DEVICE):
+    # Wrap the model if not already wrapped.
+    model.to(DEVICE)
+    model.eval()
+
+    # If model is wrapped in DataParallel, get the underlying model.
+    if hasattr(model, "module"):
+        base_model = model.module
+    else:
+        base_model = model
+
+    # Our RADDINO_Model stores the backbone under "rad_dino".
+    # Wrap the final norm1 layer of the last encoder layer.
+    if hasattr(base_model, "rad_dino"):
+        target_layer = [base_model.rad_dino.encoder.layer[-1].norm1]
+        # target_layers = [model.rad_dino.encoder.layer[-1].norm1]
+    else:
+        raise AttributeError("Model does not have attribute 'rad_dino'")
+
+    print("#########Target Layer of RADDINO for GradCAM#########")
+    print(target_layer)
+
+    # Create and return the GradCAM instance.
+    return GradCAM(model=model, target_layers=target_layer, reshape_transform=reshape_transform)
+
+def generate_gradcam_visualizations_test(model, test_loader, DEVICE, threshold, save_dir):
+    """
+    Generate and save Grad-CAM visualizations for testing.
+    """
+    grad_cam = create_gradcam(model, DEVICE)
+    
+    # Ensure the grad-CAM output directory exists.
+    gradcam_dir = os.path.join(save_dir, "gradcam")
+    if not os.path.exists(gradcam_dir):
+        os.makedirs(gradcam_dir, exist_ok=True)
+    
+    for i, data in enumerate(test_loader):
+        inputs = data['image']
+        png_path = data['png_name']
+
+        # get ground truth label from the batch & convert ground-truth value to human-readable string.
+        actual_label_val = data['label'][0].item() if torch.is_tensor(data['label'][0]) else data['label'][0]
+        actual_label = 'Pneumoperitoneum' if int(actual_label_val) == 1 else 'Non Pneumoperitoneum'
+
+        outputs = process_gradcam_batch(model, inputs, grad_cam, DEVICE, threshold, rounding_precision=4)
+        
+        # Determine predicted class label.
+        clspred = 'Pneumoperitoneum' if int(outputs['cls_pred_bin'].item()) == 1 else 'Non Pneumoperitoneum'
+        
+        plt.figure(figsize=(7,7), dpi=114.1)
+        plt.imshow(outputs['visualization_g'])
+        plt.axis('off')
+        plt.title(f"Predicted: {clspred}\nActual: {actual_label}\nLikelihood: {outputs['cls_pred_rounded']}   Threshold: {threshold:.4f}", fontsize=17)
+        
+        file_name = f"{png_path[0].split('.')[0]}_gradcam.png"
+        plt.savefig(os.path.join(gradcam_dir, file_name), bbox_inches='tight', pad_inches=0.15)
+        plt.close()
+    print("Grad-CAM visualizations saved successfully!")
+
+############################# EigenCAM #######################################
+def create_eigencam(model, DEVICE):
+    # Wrap the model if not already wrapped
+    model.to(DEVICE)
+    model.eval()
+
+    # If model is wrapped in DataParallel, get the underlying model
+    if hasattr(model, "module"):
+        base_model = model.module
+    else:
+        base_model = model
+
+    # Target the final norm1 layer of the last encoder layer
+    if hasattr(base_model, "rad_dino"):
+        target_layer = [base_model.rad_dino.encoder.layer[-1].norm1]
+    else:
+        raise AttributeError("Model does not have attribute 'rad_dino'")
+
+    print("#########Target Layer of RADDINO for EigenCAM#########")
+    print(target_layer)
+
+    # Create and return the EigenCAM instance
+    eigen_cam = EigenCAM(
+        model=model, 
+        target_layers=target_layer, 
+        reshape_transform=reshape_transform
+    )
+    
+    return eigen_cam
+
+def generate_eigencam_visualizations_test(model, test_loader, DEVICE, threshold, save_dir):
+    """
+    Generate and save EigenCAM visualizations for testing.
+    """
+    eigen_cam = create_eigencam(model, DEVICE)
+    
+    # Ensure the output directory exists
+    eigencam_dir = os.path.join(save_dir, "eigencam")
+    if not os.path.exists(eigencam_dir):
+        os.makedirs(eigencam_dir, exist_ok=True)
+
+    for i, data in enumerate(test_loader):
+        inputs = data['image']
+        png_path = data['png_name']
+
+        # get ground truth label from the batch & convert ground-truth value to human-readable string.
+        actual_label_val = data['label'][0].item() if torch.is_tensor(data['label'][0]) else data['label'][0]
+        actual_label = 'Pneumoperitoneum' if int(actual_label_val) == 1 else 'Non Pneumoperitoneum'
+
+        outputs = process_gradcam_batch(model, inputs, eigen_cam, DEVICE, threshold, rounding_precision=4)
+        
+        # Determine predicted class label.
+        clspred = 'Pneumoperitoneum' if int(outputs['cls_pred_bin'].item()) == 1 else 'Non Pneumoperitoneum'
+        
+        plt.figure(figsize=(7,7), dpi=114.1)
+        plt.imshow(outputs['visualization_g'])
+        plt.axis('off')
+        plt.title(f"Predicted: {clspred}\nActual: {actual_label}\nLikelihood: {outputs['cls_pred_rounded']}   Threshold: {threshold}", fontsize=17)
+        
+        file_name = f"{png_path[0].split('.')[0]}_eigencam.png"
+        plt.savefig(os.path.join(eigencam_dir, file_name), bbox_inches='tight', pad_inches=0.15)
+        plt.close()
+    print("EigenCAM visualizations saved successfully!")
 
 ############################################################################
 ######################## Attention Rollout #################################

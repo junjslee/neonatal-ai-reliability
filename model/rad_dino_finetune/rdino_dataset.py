@@ -9,11 +9,6 @@ from monai.data import Dataset # Assuming this is torch.utils.data.Dataset or si
 import pandas as pd # Import pandas for type hint
 
 class RADDINO_LateralDatasetPNG(Dataset):
-    """
-    Custom Dataset for classification using PNG images.
-    Expects a DataFrame with columns: 'png_path', 'Binary_Label', and 'Orientation'.
-    Deterministically flips images with 'L' orientation to 'R' before other transforms.
-    """
     def __init__(self, df: pd.DataFrame, args, training=True):
         # *** CHANGE: Check for required columns ***
         required_cols = ['png_path', 'Binary_Label', 'Orientation']

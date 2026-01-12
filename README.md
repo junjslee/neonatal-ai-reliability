@@ -82,7 +82,7 @@ If you use this codebase or methodology, please cite:
 
 For technical questions or collaborations:
 
-Junseong Lee, BS (UIUC / Asan Medical Center): junlee652@gmail.com
+Junseong Lee, BS (UIUC / Asan Medical Center): junseong.lee652@gmail.com
 
 Hee Mang Yoon, MD, PhD (Corresponding Author): espoirhm@gmail.com
 

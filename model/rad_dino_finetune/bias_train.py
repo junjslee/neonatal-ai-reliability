@@ -1,4 +1,3 @@
-# python workspace/jun/nec_lat/rad_dino/rad_dino_code/bias_train.py --path workspace/yeonsu/0.Projects/Pneumoperitoneum/data/external_data/External6.csv --version 9999 --flip --gpu 1 --batch 4 --use_lora --apply_mlp_lora --custom_batch_atypical --epoch 50 --optim adamw --lr_startstep 0.0006 --lr_type cosinewarm --gamma_truefalse --rotate_percentage 0.8 --gaussian_truefalse --gaussian_percentage 0.3 --elastic_truefalse --cosinewarmrefined --apply_label_and_patient_awareness --patience 20
 import datetime
 import os
 import json
@@ -29,11 +28,11 @@ except ImportError:
 
 import rdino_config
 import rdino_utils
-from rdino_gradcam import generate_gradcam_visualizations_test, generate_eigencam_visualizations_test, generate_vit_reciprocam_visualizations_test, generate_scorecam_visualizations_test
+from rdino_gradcam import generate_vit_reciprocam_visualizations_test
 from rdino_losses import ClassificationLoss
 import rdino_model
-from custom_scheduler import CosineAnnealingWarmUpRestarts
-from custom_batch_sampler import AtypicalInclusiveBatchSampler, PatientAwareAtypicalInclusiveBatchSampler, PatientAwareAtypicalLabelBalancedSampler
+from scheduler import CosineAnnealingWarmUpRestarts
+from rfbs import RepresentationFocusedBatchSampler
 
 import os
 import cv2
@@ -47,11 +46,6 @@ import pandas as pd # Import pandas for type hint
 
 
 class RADDINO_LateralDatasetPNG(Dataset):
-    """
-    Custom Dataset for classification using PNG images.
-    Expects a DataFrame with columns: 'png_path', 'Binary_Label', and 'Orientation'.
-    Deterministically flips images with 'L' orientation to 'R' before other transforms.
-    """
     def __init__(self, df: pd.DataFrame, args, training=True, modeling=True):
         # *** CHANGE: Check for required columns ***
         required_cols = ['png_path', 'biased_label', 'Orientation']
@@ -84,7 +78,6 @@ class RADDINO_LateralDatasetPNG(Dataset):
             other_augments = []
             if not args.original:
                  other_augments.extend([
-                    # *** CHANGE: Removed A.HorizontalFlip - flip is now deterministic based on Orientation ***
                     # A.HorizontalFlip(p=args.horizontalflip_percentage),
                     A.Sharpen(alpha=(0.1,0.4),lightness=(0.5,1.0),p=args.sharp_percentage),
                  ])
@@ -326,27 +319,16 @@ def main():
         freeze = True
     
     # Create Model
-    if args.use_peft:
-        model = rdino_model.RADDINOPeft_Model(
-            n_classes=1, # train_dataset.num_classes
-            use_peft=True,
-            r=args.lora_r,
-            apply_mlp_lora=args.apply_mlp_lora,
-            include_segmentation=args.include_segmentation,
-            img_dim=(args.size, args.size)
-        )
-        apply_mlp_lora=args.apply_mlp_lora
-    else:
-        model = rdino_model.RADDINO_Model(
-            n_classes=1,
-            use_lora=args.use_lora,
-            r=args.lora_r,
-            alpha=args.lora_alpha,
-            apply_mlp_lora=args.apply_mlp_lora,
-            freeze_encoder=freeze,
-            include_segmentation=args.include_segmentation,
-            img_dim=(args.size, args.size)
-        )
+    model = rdino_model.RADDINO_Model(
+        n_classes=1,
+        use_lora=args.use_lora,
+        r=args.lora_r,
+        alpha=args.lora_alpha,
+        apply_mlp_lora=args.apply_mlp_lora,
+        freeze_encoder=freeze,
+        include_segmentation=args.include_segmentation,
+        img_dim=(args.size, args.size)
+    )
     
     # Multi-GPU support
     # num_gpus = len(os.environ["CUDA_VISIBLE_DEVICES"].split(','))
@@ -391,27 +373,6 @@ def main():
         else:
             model.load_model_checkpoint(checkpoint, DEVICE)
     else:
-        # Set up optimizer and scheduler
-        # if args.optim == 'adam':
-        #     optimizer = torch.optim.Adam(
-        #     params=filter(lambda p: p.requires_grad, model.parameters()),
-        #     lr=args.lr_startstep,
-        #     betas=(0.9, 0.999),
-        #     eps=1e-08,
-        #     weight_decay=5e-4, # 1e-4
-        #     amsgrad=False
-        # )
-        # elif args.optim == 'adamw':
-        #     optimizer = torch.optim.AdamW(
-        #     params=filter(lambda p: p.requires_grad, model.parameters()),
-        #     lr=args.lr_startstep,
-        #     betas=(0.9, 0.999),
-        #     eps=1e-08,
-        #     weight_decay=5e-4, # 1e-4 ;; 1e-2 to 5e-2
-        #     amsgrad=False
-        # )
-        # else:
-        #     raise ValueError(f"Unknown optimizer: {args.optim}")
         if args.lr_type == 'reduce':
             optimizer = torch.optim.AdamW(
             params=filter(lambda p: p.requires_grad, model.parameters()),
@@ -502,9 +463,6 @@ def main():
     # val_df, test_df = train_test_split(temp_df, test_size=2/3, random_state=args.seed, stratify=temp_df['Binary_Label'])
     # print(f"Train samples: {len(train_df)}, Validation samples: {len(val_df)}, Test samples: {len(test_df)}")
     #--------------
-    # Check if 'data_split_kfold' column exists in the DataFrame's columns
-    # Ensure your DataFrame 'df' has the 'biased_label' column.
-    # If not, you might need to load it or ensure it's created correctly.
     if 'biased_label' not in df.columns:
         raise ValueError("The required column 'biased_label' was not found in the DataFrame for stratification. Cannot proceed.")
     
@@ -575,7 +533,7 @@ def main():
         if args.apply_patient_awareness_to_custom_batch:
             train_loader = torch.utils.data.DataLoader(
                 dataset=train_dataset,
-                batch_sampler=PatientAwareAtypicalInclusiveBatchSampler(dataset=train_dataset, batch_size=args.batch, shuffle=True, drop_last=drop_lastbatch, debug=False),
+                batch_sampler=RepresentationFocusedBatchSampler(dataset=train_dataset, batch_size=args.batch, shuffle=True, drop_last=drop_lastbatch, debug=False),
                 num_workers=4,
                 worker_init_fn=rdino_utils.seed_worker,
                 pin_memory=True
@@ -583,14 +541,6 @@ def main():
         elif args.apply_label_and_patient_awareness:
             train_loader = torch.utils.data.DataLoader(
                 dataset=train_dataset,
-                # batch_sampler=PatientAwareAtypicalLabelBalancedSampler(
-                #     dataset=train_dataset,
-                #     batch_size=args.batch,
-                #     target_positive_ratio=0.5, # Adjust as needed
-                #     shuffle=True,
-                #     drop_last=drop_lastbatch,
-                #     debug=False # Set True to see detailed batch info
-                # ),
                 num_workers=4,
                 worker_init_fn=rdino_utils.seed_worker,
                 pin_memory=True
@@ -677,19 +627,6 @@ def main():
         except Exception as e:
             print(f"[Debug] Error saving image with OpenCV: {e}")
 
-        # Optionally, also save with Matplotlib for comparison or different styling
-        # save_path_plt = os.path.join(sample_save_dir, f"plt_sample_idx0_label{int(label)}_{png_name}")
-        # try:
-        #     plt.figure(figsize=(6, 6))
-        #     plt.imshow(image_numpy_to_save, cmap='gray' if image_numpy_to_save.ndim == 2 else None)
-        #     plt.title(f"Processed Sample 0 (from {png_name}) - Label: {label}")
-        #     plt.colorbar()
-        #     plt.savefig(save_path_plt)
-        #     plt.close()
-        #     print(f"[Debug] Saved processed sample with Matplotlib to: {save_path_plt}")
-        # except Exception as e:
-        #     print(f"[Debug] Error saving image with Matplotlib: {e}")
-
     else:
         print("[Debug] train_dataset not available to save a sample.")
     # --- End Visualization ---
@@ -701,7 +638,6 @@ def main():
             os.makedirs(weights_dir, exist_ok=True)
             print(f"Created weights directory: {weights_dir}")
 
-        # --- ADD THIS SECTION ---
         # Instantiate loss functions ONCE before the loop
         # Apply pos_weight ONLY to the training loss
         print("Instantiating loss functions...")

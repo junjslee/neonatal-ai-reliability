@@ -1,0 +1,13 @@
+{
+  "path": "workspace/yeonsu/0.Projects/Pneumoperitoneum/data/external_data/External5.csv",
+  "gpu": "1",
+  "external": true,
+  "version": 30,
+  "layers": "resnet152",
+  "size": 518,
+  "pretrained_weight": "/workspace/jun/nec_lat/cnn_classification/results/v30_20250520_193403_SBATCH53408_11_inferenceF_layerresnet152_batch6_epoch120_NVIDIA_RTX_A6000/weights/v30_20250520_193403_SBATCH53408_11_inferenceF_layerresnet152_batch6_epoch120_NVIDIA_RTX_A6000_best.pth",
+  "seed": 42,
+  "job_id": "54643",
+  "job_array": "9",
+  "model_threshold": 0.2128
+}

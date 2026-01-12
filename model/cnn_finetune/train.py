@@ -24,7 +24,7 @@ from losses import ClassificationLoss
 from model import LateralClassificationModel
 from dataset.lateral_dataset import LateralDataset
 from dataset.lateral_dataset_png import LateralDatasetPNG
-from custom_batch_sampler import AtypicalInclusiveBatchSampler, PatientAwareAtypicalInclusiveBatchSampler, PatientAwareAtypicalLabelBalancedSampler
+from model.cnn_finetune.rfbs import RepresentationFocusedBatchSampler
 
 
 def train(model, criterion, data_loader, optimizer, device):

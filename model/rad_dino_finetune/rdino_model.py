@@ -204,6 +204,11 @@ class RADDINO_Model(nn.Module):
         
         # Get RAD-DINO embeddings
         encoder_output = self.rad_dino(x_processed, output_hidden_states=True)
+        # encoder_output = self.rad_dino(
+        #     x_processed,
+        #     output_hidden_states=True,
+        #     output_attentions=output_attentions
+        # )
 
         if output_attentions:
             return encoder_output
@@ -341,76 +346,8 @@ class RADDINO_Model(nn.Module):
         
         self.load_state_dict(state_dict)
 
-    # def merge_lora(self):
-    # """
-    # Fuse all LoRA adapters into base weights for:
-    #   1) attention Q/V
-    #   2) MLP fc1 (if apply_mlp_lora=True)
-    #   3) classification_head (if LoRA applied)
-    # Restore original forwards and delete adapter modules.
-    # Must run after model.to(device).
-    # """
-    # scale = self.lora_alpha / self.lora_r
-    # device = next(self.parameters()).device
-
-    # # 1) Attention Q/V adapters
-    # for layer_idx in self.lora_layers:
-    #     block = self.rad_dino.encoder.layer[layer_idx].attention.attention
-    #     for idx, proj_name in enumerate(["query", "value"]):
-    #         proj = getattr(block, proj_name)
-    #         w_a = getattr(self, f"w_a_{layer_idx}_{idx}").to(device)
-    #         w_b = getattr(self, f"w_b_{layer_idx}_{idx}").to(device)
-    #         with torch.no_grad():
-    #             delta = scale * (w_b.weight @ w_a.weight)
-    #             proj.weight.data += delta
-    #         if hasattr(proj, "_original_forward"):
-    #             proj.forward = proj._original_forward
-    #             del proj._original_forward
-    #         delattr(self, f"w_a_{layer_idx}_{idx}")
-    #         delattr(self, f"w_b_{layer_idx}_{idx}")
-
-    # # 2) MLP fc1 adapters
-    # if getattr(self, "apply_mlp_lora", False):
-    #     for layer_idx, w_a_fc1, w_b_fc1 in self.lora_mlp_modules:
-    #         fc1 = self.rad_dino.encoder.layer[layer_idx].mlp.fc1
-    #         w_a_fc1 = w_a_fc1.to(device)
-    #         w_b_fc1 = w_b_fc1.to(device)
-    #         with torch.no_grad():
-    #             delta = scale * (w_b_fc1.weight @ w_a_fc1.weight)
-    #             fc1.weight.data += delta
-    #         if hasattr(fc1, "_original_forward"):
-    #             fc1.forward = fc1._original_forward
-    #             del fc1._original_forward
-    #         delattr(self, f"lora_mlp_w_a_{layer_idx}")
-    #         delattr(self, f"lora_mlp_w_b_{layer_idx}")
-
-    # # 3) Classification head adapters
-    # # Requires that you stored self.lora_head_modules = [(seq_idx, w_a, w_b), ...]
-    # if hasattr(self, "lora_head_modules"):
-    #     for seq_idx, w_a_h, w_b_h in self.lora_head_modules:
-    #         head_layer = self.classification_head[seq_idx]
-    #         w_a_h = w_a_h.to(device)
-    #         w_b_h = w_b_h.to(device)
-    #         with torch.no_grad():
-    #             delta = scale * (w_b_h.weight @ w_a_h.weight)
-    #             head_layer.weight.data += delta
-    #         if hasattr(head_layer, "_original_forward"):
-    #             head_layer.forward = head_layer._original_forward
-    #             del head_layer._original_forward
-    #         delattr(self, f"lora_head_w_a_{seq_idx}")
-    #         delattr(self, f"lora_head_w_b_{seq_idx}")
-
-    # # cleanup bookkeeping
-    # self.lora_layers = []
-    # if hasattr(self, "lora_mlp_modules"):
-    #     self.lora_mlp_modules = []
-    # if hasattr(self, "lora_head_modules"):
-    #     self.lora_head_modules = []
-
-    # return self
-
 #########################################################################################
-## Not using due to conflicts and errors --> building custom lora ##
+## Not using due to conflicts and errors --> building custom-built lora ##
 #########################################################################################
 # use PEFT from HuggingFace
 from peft import get_peft_model, LoraConfig, TaskType, PeftModel

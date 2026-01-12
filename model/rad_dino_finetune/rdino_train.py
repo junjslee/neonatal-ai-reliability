@@ -28,12 +28,12 @@ except ImportError:
 
 import rdino_config
 import rdino_utils
-from rdino_gradcam import generate_gradcam_visualizations_test, generate_eigencam_visualizations_test, generate_vit_reciprocam_visualizations_test, generate_scorecam_visualizations_test
+from rdino_gradcam import generate_vit_reciprocam_visualizations_test
 from rdino_losses import ClassificationLoss
 import rdino_model
 from rdino_dataset import RADDINO_LateralDatasetPNG
-from custom_scheduler import CosineAnnealingWarmUpRestarts
-from custom_batch_sampler import AtypicalInclusiveBatchSampler, PatientAwareAtypicalInclusiveBatchSampler, PatientAwareAtypicalLabelBalancedSampler
+from scheduler import CosineAnnealingWarmUpRestarts
+from rfbs import RepresentationFocusedBatchSampler
 
 
 def log_total_gradient_norm(model):
@@ -226,27 +226,6 @@ def main():
         else:
             model.load_model_checkpoint(checkpoint, DEVICE)
     else:
-        # Set up optimizer and scheduler
-        # if args.optim == 'adam':
-        #     optimizer = torch.optim.Adam(
-        #     params=filter(lambda p: p.requires_grad, model.parameters()),
-        #     lr=args.lr_startstep,
-        #     betas=(0.9, 0.999),
-        #     eps=1e-08,
-        #     weight_decay=5e-4, # 1e-4
-        #     amsgrad=False
-        # )
-        # elif args.optim == 'adamw':
-        #     optimizer = torch.optim.AdamW(
-        #     params=filter(lambda p: p.requires_grad, model.parameters()),
-        #     lr=args.lr_startstep,
-        #     betas=(0.9, 0.999),
-        #     eps=1e-08,
-        #     weight_decay=5e-4, # 1e-4 ;; 1e-2 to 5e-2
-        #     amsgrad=False
-        # )
-        # else:
-        #     raise ValueError(f"Unknown optimizer: {args.optim}")
         if args.lr_type == 'reduce':
             optimizer = torch.optim.AdamW(
             params=filter(lambda p: p.requires_grad, model.parameters()),
@@ -384,48 +363,31 @@ def main():
 
     drop_lastbatch = args.drop_last
 
-    if args.custom_batch_atypical:
-        if args.apply_patient_awareness_to_custom_batch:
-            train_loader = torch.utils.data.DataLoader(
-                dataset=train_dataset,
-                batch_sampler=PatientAwareAtypicalInclusiveBatchSampler(dataset=train_dataset, batch_size=args.batch, shuffle=True, drop_last=drop_lastbatch, debug=False),
-                num_workers=4,
-                worker_init_fn=rdino_utils.seed_worker,
-                pin_memory=True
-            )
-        elif args.apply_label_and_patient_awareness:
-            train_loader = torch.utils.data.DataLoader(
-                dataset=train_dataset,
-                batch_sampler=PatientAwareAtypicalLabelBalancedSampler(
-                    dataset=train_dataset,
-                    batch_size=args.batch,
-                    target_positive_ratio=0.5, # Adjust as needed
-                    shuffle=True,
-                    drop_last=drop_lastbatch,
-                    debug=False # Set True to see detailed batch info
-                ),
-                num_workers=4,
-                worker_init_fn=rdino_utils.seed_worker,
-                pin_memory=True
-            )
-        else:
-            train_loader = torch.utils.data.DataLoader(
-                train_dataset,
-                batch_sampler=AtypicalInclusiveBatchSampler(train_dataset, batch_size=args.batch, shuffle=True, drop_last=drop_lastbatch, debug=False),
-                num_workers=4,
-                worker_init_fn=rdino_utils.seed_worker,
-                pin_memory=True
-            )
-    else:
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
+    # if args.custom_batch_atypical:
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        batch_sampler=RepresentationFocusedBatchSampler(
+            dataset=train_dataset,
             batch_size=args.batch,
-            collate_fn=default_collate,
+            target_positive_ratio=0.5, # Adjust as needed
             shuffle=True,
-            num_workers=4,
-            worker_init_fn=rdino_utils.seed_worker,
-            pin_memory=True
-        )
+            drop_last=drop_lastbatch,
+            debug=False # Set True to see detailed batch info
+        ),
+        num_workers=4,
+        worker_init_fn=rdino_utils.seed_worker,
+        pin_memory=True
+    )
+    # else:
+    #     train_loader = torch.utils.data.DataLoader(
+    #         train_dataset,
+    #         batch_size=args.batch,
+    #         collate_fn=default_collate,
+    #         shuffle=True,
+    #         num_workers=4,
+    #         worker_init_fn=rdino_utils.seed_worker,
+    #         pin_memory=True
+    #     )
     
     val_loader = torch.utils.data.DataLoader(
         val_dataset, 
@@ -455,7 +417,6 @@ def main():
             os.makedirs(weights_dir, exist_ok=True)
             print(f"Created weights directory: {weights_dir}")
 
-        # --- ADD THIS SECTION ---
         # Instantiate loss functions ONCE before the loop
         # Apply pos_weight ONLY to the training loss
         print("Instantiating loss functions...")
@@ -468,7 +429,6 @@ def main():
             classification_weight=1.0,
             pos_weight_tensor=None # Explicitly None or omit
         ).to(DEVICE)
-        # --- END ADDED SECTION ---
         
         # Initialize tracking dictionaries
         losses = {k: [] for k in ['train_epoch_loss', 'test_epoch_loss']}
@@ -827,11 +787,6 @@ def main():
                 print(f'weight : \n{args.pretrained_weight}\n')
             else:
                 print(f'weight : \n{run_name}\n')
-                    
-            # Generate GradCAM visualizations.
-            # generate_scorecam_visualizations_test(model, test_loader, DEVICE, thr_val, inference_save_dir)
-            # generate_vit_reciprocam_visualizations_test(model, test_loader, DEVICE, thr_val, inference_save_dir)
-            
     else:
         validate_criterion = ClassificationLoss(
                 classification_weight=1.0,
