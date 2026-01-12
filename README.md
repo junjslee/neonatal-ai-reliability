@@ -118,17 +118,6 @@ This README is written to “drop in” visuals without reformatting.
 
 ---
 
-## Reproducibility & materials
-This repository is intended for **research visibility**, high-level communication, and archiving of study materials.
-
-- **Manuscript:** `NICU HCI Manuscript.docx`  
-- **Supplement:** `NICU HCI Supplement.docx`  
-- **Code:** (optional—add if/when you open-source; not required for this README)
-
-> If you plan to add code later, consider adding a `/src` directory and a short `/reproducibility` note describing environment + minimal scripts to recreate the key tables.
-
----
-
 ## Clinical and ethical note
 The **Error-Injected AI** was created solely as an experimental probe to study verification behavior under systematic AI failure modes. It is **not** intended for clinical use, deployment, or commercialization.
 
@@ -169,8 +158,6 @@ If you use ideas, framing, or figures from this repository, please cite:
   
 - **Namkug Kim, PhD** — namkugkim@gmail.com  
   Department of Radiology, University of Ulsan College of Medicine, Asan Medical Center  
-  88, Olympic-ro 43-gil, Songpa-gu, Seoul, 05505, South Korea  
-  Tel: +82-2-3010-6573  
 
 ---
 
