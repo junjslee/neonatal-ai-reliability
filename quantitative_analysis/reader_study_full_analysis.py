@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Reader-study statistical pipeline (UPDATED, aligned to manuscript hierarchy)
-
-MANUSCRIPT HIERARCHY (recommended)
-  Primary (Main manuscript): Set B only (AI-assisted cases), Unreliable vs Reliable, with Reliability×Group interaction
-    - Logistic GLMM with crossed random intercepts (reader + case)
-
-  Secondary (Main manuscript): Set B only
-    - Reading time (log_time): LMM with crossed random intercepts
-    - CAM usage (show_cam): logistic GLMM with crossed random intercepts
-    - (Optional but recommended) Sensitivity/Specificity: stratified GLMMs on y_true==1 and y_true==0
-
-  Supplement / Robustness:
-    - Full dataset (unaided vs optimized vs unreliable) GLMM and contrasts: contextual/exploratory only
-    - GEE (clustered by reader) for full and Set B: robustness only (does not capture crossed reader×case dependence)
-    - Period adjustment, case-mix adjustment, random slope, LOO/LONO, permutation LRT
-    - Mechanistic models (verification effort: disagree×reliability×group), phenotype estimands via reader bootstrap
-
 USAGE
   RPY2_CFFI_MODE=ABI python ./reader_study_full_pipeline_UPDATED.py
 
-REQUIREMENTS
-  - pymer4 + rpy2 + R (lme4 installed)
+--------------------------------------------
+
+Reader-study statistical pipeline (UPDATED)
+
+MANUSCRIPT HIERARCHY
+  Primary Analysis (Table 2):
+    - Full Dataset (Unaided vs. Reliable AI vs. Error-Injected AI)
+    - Logistic GLMM with crossed random intercepts (reader + case) to test Interaction.
+
+  Secondary Analysis (Mechanism & Verification):
+    - Aided Set Only (Reliable vs. Error-Injected)
+    - Reading time (LMM) and CAM usage (Logistic GLMM).
+    - Phenotype analysis (Sentinel Behavior vs. Automation Bias).
+
+  Robustness / Sensitivity:
+    - Period adjustment, case-mix adjustment, permutation tests.
+
 """
 
 import os
@@ -30,6 +28,15 @@ import re
 import warnings
 import numpy as np
 import pandas as pd
+import scipy.stats as st
+from sklearn.metrics import roc_auc_score
+from sklearn.utils import resample
+
+# --- INSERT THIS BLOCK HERE ---
+# Force rpy2 to use the specific R installed in your Conda environment
+# This must be done BEFORE importing rpy2 or pymer4
+os.environ['R_HOME'] = '/Users/junlee/miniconda3/lib/R'
+# ------------------------------
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -52,8 +59,338 @@ SHEET_EXCLUDE_CONTAINS = ["readme", "info", "summary"]
 # Set to None if you want to skip case-mix merge
 EXTERNAL_CSV_PATH = "/Users/junlee/Desktop/mi2rl_research/Neonatal_HCI/Neonatal_HCI_Codebase/_archive/reader_study_results/External7_for_analysis.csv"
 
-OUTDIR = "./hai_outputs_glmm"
+OUTDIR = "./hai_outputs_glmm_final_updated_logging" ################################# the commented one below uses # OUTDIR = "./hai_outputs_glmm_final_updated"
 os.makedirs(OUTDIR, exist_ok=True)
+
+# =========================
+# 0.1) LLM REPORTING / GLOBAL LOGGING
+# =========================
+# This block augments the pipeline to emit a single comprehensive text report intended
+# for LLM analysis. It captures:
+#   - All stdout/stderr
+#   - Any DataFrame saved to CSV/Excel (as markdown)
+#   - Any text logs saved via open(..., 'w'/'a') (as plaintext)
+#   - Any figures saved via savefig() (title/axes + data summary)
+
+import sys
+import io
+import builtins
+import traceback
+from datetime import datetime
+from contextlib import contextmanager
+
+LLM_REPORT_PATH = os.path.join(OUTDIR, "LLM_PIPELINE_DUMP.txt")
+
+
+class _TeeStream:
+    """Write to multiple streams (best-effort)."""
+    def __init__(self, *streams):
+        self.streams = [s for s in streams if s is not None]
+
+    def write(self, data):
+        for s in self.streams:
+            try:
+                s.write(data)
+                s.flush()
+            except Exception:
+                pass
+        return len(data)
+
+    def flush(self):
+        for s in self.streams:
+            try:
+                s.flush()
+            except Exception:
+                pass
+
+
+class LLMReport:
+    def __init__(self, path: str):
+        self.path = str(path)
+        self._fp = open(self.path, "w", encoding="utf-8", errors="replace")
+        # primary_full Header (REQUIRED)
+        self._fp.write(
+            "You are a Senior Data Scientist. Below is a complete dump of a statistical pipeline. "
+            "Analyze the results, cross-referencing the figures and tables by their filenames.\n"
+            # "Analyze the results, cross-referencing the figures and tables by their filenames to provide a final summary.\n"
+        )
+        self._fp.write(f"Report generated: {datetime.now().isoformat(timespec='seconds')}\n")
+        self._fp.write(f"Working directory: {os.getcwd()}\n")
+        self._fp.write(f"OUTDIR: {OUTDIR}\n")
+        self._fp.write("=" * 80 + "\n\n")
+        self._fp.flush()
+
+    def close(self):
+        try:
+            self._fp.flush()
+            self._fp.close()
+        except Exception:
+            pass
+
+    def _divider(self):
+        self._fp.write("\n" + ("=" * 80) + "\n\n")
+
+    def _start_file(self, filename: str):
+        self._divider()
+        self._fp.write(f"--- START OF DATA FOR FILE: [{filename}] ---\n\n")
+
+    def _end_file(self, filename: str):
+        self._fp.write(f"\n--- END OF DATA FOR FILE: [{filename}] ---\n")
+        self._divider()
+        self._fp.flush()
+
+    def log_text_blob(self, filename: str, text: str):
+        self._start_file(filename)
+        self._fp.write(text if text is not None else "")
+        self._end_file(filename)
+
+    def log_dataframe_file(self, filename: str, df: "pd.DataFrame"):
+        self._start_file(filename)
+        self._fp.write(f"[DATAFRAME] shape={df.shape}\n\n")
+        try:
+            md = df.to_markdown(index=False)
+            self._fp.write(md + "\n")
+        except Exception as e:
+            self._fp.write(f"[WARN] df.to_markdown() failed: {repr(e)}\n")
+            self._fp.write(df.head(50).to_string(index=False) + "\n")
+        self._end_file(filename)
+
+    def log_figure(self, filename: str, fig, ax):
+        # Visual-to-Text Translation (REQUIRED)
+        self._start_file(filename)
+        self._fp.write(f"DATA REPRESENTING FIGURE: [{filename}]\n\n")
+
+        title = ""
+        xlabel = ""
+        ylabel = ""
+        try:
+            title = ax.get_title() or ""
+            xlabel = ax.get_xlabel() or ""
+            ylabel = ax.get_ylabel() or ""
+        except Exception:
+            pass
+
+        self._fp.write(f"Title: {title}\n")
+        self._fp.write(f"X-axis label: {xlabel}\n")
+        self._fp.write(f"Y-axis label: {ylabel}\n\n")
+
+        # Try to extract raw plotted coordinates from common Matplotlib artists.
+        rows = []
+
+        # Line plots (including ROC curves, etc.)
+        try:
+            for li, line in enumerate(ax.get_lines() or []):
+                x = getattr(line, "get_xdata", lambda: [])()
+                y = getattr(line, "get_ydata", lambda: [])()
+                if x is None or y is None:
+                    continue
+                for xi, yi in zip(list(x), list(y)):
+                    rows.append({"series": f"line_{li}", "x": float(xi), "y": float(yi)})
+        except Exception:
+            pass
+
+        # Scatter plots / PathCollections
+        try:
+            for ci, coll in enumerate(getattr(ax, "collections", []) or []):
+                offsets = getattr(coll, "get_offsets", lambda: None)()
+                if offsets is None:
+                    continue
+                try:
+                    off = offsets.tolist()
+                except Exception:
+                    off = list(offsets)
+                for (xi, yi) in off:
+                    try:
+                        rows.append({"series": f"collection_{ci}", "x": float(xi), "y": float(yi)})
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        # Bar plots / patches (use center x and height)
+        try:
+            for pi, p in enumerate(getattr(ax, "patches", []) or []):
+                # Filter out rectangles that are not bars (best effort)
+                w = getattr(p, "get_width", lambda: None)()
+                h = getattr(p, "get_height", lambda: None)()
+                x0 = getattr(p, "get_x", lambda: None)()
+                if w is None or h is None or x0 is None:
+                    continue
+                xc = float(x0) + float(w) / 2.0
+                rows.append({"series": f"patch_{pi}", "x": xc, "y": float(h)})
+        except Exception:
+            pass
+
+        if len(rows) == 0:
+            self._fp.write("[NOTE] Could not extract plotted coordinates from this figure (no lines/collections/patches).\n")
+            self._end_file(filename)
+            return
+
+        dcoords = pd.DataFrame(rows)
+        # Summaries
+        try:
+            x_min = float(dcoords["x"].min())
+            x_max = float(dcoords["x"].max())
+            x_mean = float(dcoords["x"].mean())
+            y_min = float(dcoords["y"].min())
+            y_max = float(dcoords["y"].max())
+            y_mean = float(dcoords["y"].mean())
+            self._fp.write("Summary of plotted data:\n")
+            self._fp.write(f"  X: min={x_min:.6g} max={x_max:.6g} mean={x_mean:.6g}\n")
+            self._fp.write(f"  Y: min={y_min:.6g} max={y_max:.6g} mean={y_mean:.6g}\n\n")
+        except Exception:
+            self._fp.write("[WARN] Failed to compute summary statistics for figure data.\n\n")
+
+        # First 10 rows (raw coordinates)
+        self._fp.write("First 10 rows of extracted coordinates:\n")
+        try:
+            self._fp.write(dcoords.head(10).to_markdown(index=False) + "\n")
+        except Exception:
+            self._fp.write(dcoords.head(10).to_string(index=False) + "\n")
+
+        self._end_file(filename)
+
+
+# Initialize report and redirect stdout/stderr into it (REQUIRED)
+REPORT = LLMReport(LLM_REPORT_PATH)
+_ORIG_STDOUT, _ORIG_STDERR = sys.stdout, sys.stderr
+sys.stdout = _TeeStream(_ORIG_STDOUT, REPORT._fp)
+sys.stderr = _TeeStream(_ORIG_STDERR, REPORT._fp)
+
+# Monkeypatch pandas DataFrame writers so every saved table is also dumped into REPORT (REQUIRED)
+_PD_ORIG_TO_CSV = pd.DataFrame.to_csv
+_PD_ORIG_TO_EXCEL = pd.DataFrame.to_excel
+
+def _df_to_csv_logged(self, path_or_buf=None, *args, **kwargs):
+    out = _PD_ORIG_TO_CSV(self, path_or_buf, *args, **kwargs)
+    try:
+        if isinstance(path_or_buf, (str, os.PathLike)):
+            REPORT.log_dataframe_file(str(path_or_buf), self)
+    except Exception:
+        # Never break the pipeline for reporting
+        pass
+    return out
+
+def _df_to_excel_logged(self, excel_writer, *args, **kwargs):
+    out = _PD_ORIG_TO_EXCEL(self, excel_writer, *args, **kwargs)
+    try:
+        if isinstance(excel_writer, (str, os.PathLike)):
+            REPORT.log_dataframe_file(str(excel_writer), self)
+    except Exception:
+        pass
+    return out
+
+pd.DataFrame.to_csv = _df_to_csv_logged
+pd.DataFrame.to_excel = _df_to_excel_logged
+
+# Monkeypatch open() to capture any text log files written by the pipeline (best-effort)
+_BUILTIN_OPEN = builtins.open
+
+# class _LoggedTextFileProxy:
+#     def __init__(self, real_f, filename: str):
+#         self._f = real_f
+#         self._filename = filename
+#         self._buf = io.StringIO()
+
+#     def write(self, s):
+#         try:
+#             self._buf.write(s)
+#         except Exception:
+#             pass
+#         return self._f.write(s)
+
+#     def writelines(self, lines):
+#         try:
+#             for ln in lines:
+#                 self._buf.write(ln)
+#         except Exception:
+#             pass
+#         return self._f.writelines(lines)
+
+#     def flush(self):
+#         return self._f.flush()
+
+#     def close(self):
+#         try:
+#             self._f.close()
+#         finally:
+#             try:
+#                 txt = self._buf.getvalue()
+#                 if txt and self._filename and self._filename != LLM_REPORT_PATH:
+#                     REPORT.log_text_blob(self._filename, txt)
+#             except Exception:
+#                 pass
+
+#     def __getattr__(self, name):
+#         return getattr(self._f, name)
+class _LoggedTextFileProxy:
+    def __init__(self, real_f, filename: str):
+        self._f = real_f
+        self._filename = filename
+        self._buf = io.StringIO()
+
+    # --- ADDED THESE TWO METHODS ---
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+    # -------------------------------
+
+    def write(self, s):
+        try:
+            self._buf.write(s)
+        except Exception:
+            pass
+        return self._f.write(s)
+
+    def writelines(self, lines):
+        try:
+            for ln in lines:
+                self._buf.write(ln)
+        except Exception:
+            pass
+        return self._f.writelines(lines)
+
+    def flush(self):
+        return self._f.flush()
+
+    def close(self):
+        try:
+            self._f.close()
+        finally:
+            try:
+                txt = self._buf.getvalue()
+                if txt and self._filename and self._filename != LLM_REPORT_PATH:
+                    REPORT.log_text_blob(self._filename, txt)
+            except Exception:
+                pass
+
+    def __getattr__(self, name):
+        return getattr(self._f, name)
+
+def open(*args, **kwargs):
+    f = _BUILTIN_OPEN(*args, **kwargs)
+    try:
+        if len(args) >= 2:
+            filename = str(args[0])
+            mode = str(args[1])
+        else:
+            filename = str(kwargs.get("file", ""))
+            mode = str(kwargs.get("mode", "r"))
+        is_text_write = any(m in mode for m in ["w", "a", "x"]) and ("b" not in mode)
+        is_txtlike = filename.lower().endswith((".txt", ".log", ".md"))
+        if is_text_write and is_txtlike and os.path.abspath(filename) != os.path.abspath(LLM_REPORT_PATH):
+            return _LoggedTextFileProxy(f, filename)
+    except Exception:
+        pass
+    return f
+
+builtins.open = open
+
+# Ensure report is flushed/closed even if exceptions occur
+import atexit
+atexit.register(lambda: REPORT.close())
 
 # Figure sizes
 FIG_ROC = (8.2, 6.4)
@@ -147,10 +484,19 @@ Y_PROB_AI_CURVE = [
 # =========================
 def savefig(name: str):
     """
-    Saves figure as 300 DPI TIFF with LZW compression.
+    Save a figure and emit a textual "data representation" block into the LLM report.
+
+    Notes:
+      - The original pipeline uses TIFF output with LZW compression for publication quality.
+      - The reporting layer logs the *actual* filename saved.
     """
+    fig = plt.gcf()
+    ax = plt.gca()
+
+    # Preserve original behavior: write TIFF if asked for PNG
     if name.endswith(".png"):
         name = name.replace(".png", ".tif")
+
     path = os.path.join(OUTDIR, name)
     plt.savefig(
         path,
@@ -159,9 +505,16 @@ def savefig(name: str):
         bbox_inches="tight",
         pil_kwargs={"compression": "tiff_lzw"},
     )
+
+    # Log the figure metadata + extracted coordinates
+    try:
+        REPORT.log_figure(path, fig, ax)
+    except Exception:
+        # Never break the pipeline for reporting
+        pass
+
     plt.close()
     print(f"Saved: {name}")
-
 
 def _norm_col(c) -> str:
     c = str(c).strip().lower()
@@ -495,11 +848,34 @@ def parse_meta(sheet):
 def group_from_meta(meta):
     title = str(meta.get("title", "")).strip().lower()
     spec = str(meta.get("specialty", "")).strip().lower()
+    # if title == "specialist":
+    #     if "neo" in spec:
+    #         return "Neonatologist"
+    #     return "Pediatric Radiologist"
+    # return "Radiology Resident"
+    # --- UPDATED LOGIC START ---
+    # Priority 1: Use specific keywords in the 'specialty' field
+    if "neonatologist" in spec:
+        return "Neonatologist"
+    
+    if "pediatric radiologist" in spec:
+        return "Pediatric Radiologist"
+        
+    if "resident" in spec:
+        # Handles "radiology resident" or just "resident"
+        return "Radiology Resident"
+
+    # Priority 2: Fallback to Title/Specialty combo (legacy support)
+    # If title is 'specialist', check specialty for 'neo'
     if title == "specialist":
         if "neo" in spec:
             return "Neonatologist"
+        # If specialty is vague but title is Specialist, assume Ped Rad
         return "Pediatric Radiologist"
+    
+    # Default Fallback
     return "Radiology Resident"
+    # --- UPDATED LOGIC END ---
 
 
 def load_cases(sheet):
@@ -816,10 +1192,9 @@ df["condition"] = df["condition"].astype(str)
 df["group"] = df["group"].astype(str)
 
 # =========================
-# 4A) CONTEXTUAL / EXPLORATORY: Full dataset GLMM (unaided vs optimized vs unreliable)
-#     NOTE: Not primary because it mixes case sets.
+# 4A) primary_full / EXPLORATORY: Full dataset GLMM (unaided vs optimized vs unreliable)
 # =========================
-print("Running CONTEXTUAL GLMM (all conditions; exploratory) ...")
+print("Running primary_full GLMM (all conditions; exploratory) ...")
 sep_check = df.groupby(["group", "condition"])["correct"].agg(["mean", "count", "sum"])
 sep_check.to_csv(os.path.join(OUTDIR, "audit_correct_rate_by_group_condition.csv"))
 
@@ -849,7 +1224,7 @@ glmm_results = glmm_model.fit(
     control="optimizer='bobyqa', optCtrl=list(maxfun=200000)",
 )
 
-with open(os.path.join(OUTDIR, "glmm_contextual_full_correctness_summary.txt"), "w") as f:
+with open(os.path.join(OUTDIR, "glmm_primary_full_full_correctness_summary.txt"), "w") as f:
     f.write("FORMULA: " + model_formula + "\n\n")
     f.write(str(glmm_results))
 
@@ -859,7 +1234,7 @@ se_col = pick_col(coefs, ["SE", "Std. Error", "std.error", "se"])
 coefs["OR"] = np.exp(coefs[est_col].astype(float))
 coefs["OR_lower"] = np.exp(coefs[est_col].astype(float) - 1.96 * coefs[se_col].astype(float))
 coefs["OR_upper"] = np.exp(coefs[est_col].astype(float) + 1.96 * coefs[se_col].astype(float))
-coefs.to_csv(os.path.join(OUTDIR, "table_glmm_contextual_full_correctness_OR.csv"), index=False)
+coefs.to_csv(os.path.join(OUTDIR, "table_glmm_primary_full_full_correctness_OR.csv"), index=False)
 
 
 # =========================
@@ -872,6 +1247,13 @@ from statsmodels.genmod.cov_struct import Exchangeable
 
 def _safe_gee_fit(formula: str, data: pd.DataFrame, group_col: str, tag: str):
     d = data.copy()
+
+    # --- INSERT THIS FIX ---
+    # Convert explicit string types back to object for statsmodels
+    for col in d.select_dtypes(include=['string', 'string[python]']).columns:
+        d[col] = d[col].astype(object)
+    # -----------------------
+
     before_n = len(d)
     d = d.dropna(subset=[group_col]).copy()
     after_n0 = len(d)
@@ -957,12 +1339,12 @@ gee_full_formula = (
 if len(gee_case_mix_terms) > 0:
     gee_full_formula += " + " + " + ".join(gee_case_mix_terms)
 
-_safe_gee_fit(gee_full_formula, df, group_col="reader", tag="full_correctness_contextual")
+_safe_gee_fit(gee_full_formula, df, group_col="reader", tag="full_correctness_primary_full")
 
 # =========================
-# 4B) PRIMARY: Set B only (AI-assisted), Unreliable vs Reliable
+# 4B) AIDED ONLY (change: SET B = Aided = we only refer to it as aided set instead of set B only) (AI-assisted), Unreliable vs Reliable
 # =========================
-print("\n[PRIMARY] Building SetB dataset ...")
+print("\n Building aidedsetonly dataset ...")
 
 def add_sequence_and_period(df_in: pd.DataFrame) -> pd.DataFrame:
     out = df_in.copy()
@@ -1005,9 +1387,9 @@ dfB["filename"] = dfB["filename"].astype(str)
 dfB["aided_period"] = pd.to_numeric(dfB["aided_period"], errors="coerce")
 
 col_check = dfB[["reader", "sequence", "aided_period"]].drop_duplicates()
-col_check.to_csv(os.path.join(OUTDIR, "audit_setB_sequence_period.csv"), index=False)
+col_check.to_csv(os.path.join(OUTDIR, "audit_aidedsetonly_sequence_period.csv"), index=False)
 
-def fit_setB_glmm(dfin: pd.DataFrame, add_reader_slope: bool = False, add_period: bool = False, add_case_mix: bool = False):
+def fit_aidedsetonly_glmm(dfin: pd.DataFrame, add_reader_slope: bool = False, add_period: bool = False, add_case_mix: bool = False):
     d = dfin.copy()
     fixed = "correct ~ reliability * group + pgy_within_5"
     if add_period:
@@ -1044,9 +1426,9 @@ def fit_setB_glmm(dfin: pd.DataFrame, add_reader_slope: bool = False, add_period
     )
     return m, res, formula
 
-print("\n[PRIMARY] SetB-only GLMM ...")
-mB, resB, fB = fit_setB_glmm(dfB, add_reader_slope=False, add_period=False, add_case_mix=False)
-with open(os.path.join(OUTDIR, "glmm_setB_primary_summary.txt"), "w") as f:
+print("\n[ Aided (change: SET B = Aided = we only refer to it as aided set instead of set B)-only GLMM ...")
+mB, resB, fB = fit_aidedsetonly_glmm(dfB, add_reader_slope=False, add_period=False, add_case_mix=False)
+with open(os.path.join(OUTDIR, "glmm_aided_aidedsetonly_summary.txt"), "w") as f:
     f.write("FORMULA: " + fB + "\n\n")
     f.write(str(resB))
 
@@ -1056,13 +1438,13 @@ se_colB  = pick_col(coefsB, ["SE", "Std. Error", "std.error", "se"])
 coefsB["OR"] = np.exp(coefsB[est_colB].astype(float))
 coefsB["OR_lower"] = np.exp(coefsB[est_colB].astype(float) - 1.96 * coefsB[se_colB].astype(float))
 coefsB["OR_upper"] = np.exp(coefsB[est_colB].astype(float) + 1.96 * coefsB[se_colB].astype(float))
-coefsB.to_csv(os.path.join(OUTDIR, "table_glmm_setB_primary_OR.csv"), index=False)
+coefsB.to_csv(os.path.join(OUTDIR, "table_glmm_aided_aidedsetonly_OR.csv"), index=False)
 
 # Post-hoc contrasts: Unreliable vs Reliable within each group (Holm-adjusted)
-print("[PRIMARY] Post-hoc: Unreliable vs Reliable within each group (Holm) ...")
+print("Post-hoc: Unreliable vs Reliable within each group (Holm) ...")
 phB = mB.post_hoc(marginal_vars="reliability", grouping_vars="group", p_adjust="holm")
 phB_df = phB[1] if isinstance(phB, tuple) and len(phB) > 1 else phB
-phB_df.to_csv(os.path.join(OUTDIR, "table_setB_posthoc_reliability_within_group.csv"), index=False)
+phB_df.to_csv(os.path.join(OUTDIR, "table_aidedsetonly_posthoc_reliability_within_group.csv"), index=False)
 
 # Predicted probabilities at mean within-group PGY (pgy_within_5 = 0)
 grid = pd.DataFrame(
@@ -1072,12 +1454,12 @@ try:
     grid["pred_prob"] = mB.predict(grid, verify_predictions=False)
 except Exception:
     grid["pred_prob"] = np.nan
-grid.to_csv(os.path.join(OUTDIR, "table_setB_predicted_probabilities.csv"), index=False)
+grid.to_csv(os.path.join(OUTDIR, "table_aidedsetonly_predicted_probabilities.csv"), index=False)
 
 # =========================
-# PRIMARY FIGURE: SetB forest plot from post-hoc contrasts
+# FIGURE: aidedsetonly forest plot from post-hoc contrasts
 # =========================
-def build_setB_forest_from_posthoc(ph_df: pd.DataFrame) -> pd.DataFrame:
+def build_aidedsetonly_forest_from_posthoc(ph_df: pd.DataFrame) -> pd.DataFrame:
     d = ph_df.copy()
     grp_col = pick_col(d, ["group", "Group"])
     con_col = pick_col(d, ["Contrast", "contrast"])
@@ -1125,10 +1507,10 @@ def build_setB_forest_from_posthoc(ph_df: pd.DataFrame) -> pd.DataFrame:
         )
     return pd.DataFrame(out_rows)
 
-forest_setB = build_setB_forest_from_posthoc(phB_df)
-forest_setB.to_csv(os.path.join(OUTDIR, "table_forest_setB_unreliable_vs_reliable.csv"), index=False)
+forest_aidedsetonly = build_aidedsetonly_forest_from_posthoc(phB_df)
+forest_aidedsetonly.to_csv(os.path.join(OUTDIR, "table_forest_aidedsetonly_unreliable_vs_reliable.csv"), index=False)
 
-def plot_forest_setB(df_forest: pd.DataFrame, filename: str):
+def plot_forest_aidedsetonly(df_forest: pd.DataFrame, filename: str):
     fig, ax = plt.subplots(figsize=FIG_FOREST_SET_AIDED, constrained_layout=True)
     y = np.arange(len(GROUP_ORDER))[::-1]
     ax.set_xscale("log")
@@ -1152,19 +1534,19 @@ def plot_forest_setB(df_forest: pd.DataFrame, filename: str):
 
     ax.set_yticks(y)
     ax.set_yticklabels(GROUP_ORDER, fontweight="bold")
-    ax.set_xlabel("Odds Ratio (Unreliable vs Reliable), Set B (95% CI)")
+    ax.set_xlabel("Odds Ratio (Unreliable vs Reliable), change: SET B = Aided = we only refer to it as aided set instead of set B (95% CI)")
 
     xmin = max(0.1, float(df_forest["Lower"].min()) * 0.8)
     xmax = float(df_forest["Upper"].max()) * 1.5
     ax.set_xlim(xmin, xmax)
     savefig(filename)
 
-plot_forest_setB(forest_setB, "fig_forest_setB_unreliable_vs_reliable.tif")
+plot_forest_aidedsetonly(forest_aidedsetonly, "fig_forest_aidedsetonly_unreliable_vs_reliable.tif")
 
 # =========================
-# SECONDARY (MANUSCRIPT): Time and CAM usage mixed models (SetB)
+# SECONDARY (MANUSCRIPT): Time and CAM usage mixed models (aidedsetonly)
 # =========================
-print("\n[SECONDARY] SetB reading time LMM (log_time ~ reliability*group + ...) ...")
+print("\n[SECONDARY] aidedsetonly reading time LMM (log_time ~ reliability*group + ...) ...")
 dfB_time = ensure_time_features(dfB.copy(), "time_sec").dropna(subset=["log_time"]).copy()
 
 time_formula = "log_time ~ reliability * group + pgy_within_5 + (1|reader) + (1|filename)"
@@ -1174,12 +1556,12 @@ res_time2 = m_time2.fit(
     summarize=True,
     control="optimizer='bobyqa', optCtrl=list(maxfun=200000)",
 )
-with open(os.path.join(OUTDIR, "lmm_setB_logtime_secondary_summary.txt"), "w") as f:
+with open(os.path.join(OUTDIR, "lmm_aidedsetonly_logtime_secondary_summary.txt"), "w") as f:
     f.write("FORMULA: " + time_formula + "\n\n")
     f.write(str(res_time2))
-m_time2.coefs.to_csv(os.path.join(OUTDIR, "table_lmm_setB_logtime_secondary_coefs.csv"), index=False)
+m_time2.coefs.to_csv(os.path.join(OUTDIR, "table_lmm_aidedsetonly_logtime_secondary_coefs.csv"), index=False)
 
-print("\n[SECONDARY] SetB CAM usage GLMM (show_cam ~ reliability*group + ...) ...")
+print("\n[SECONDARY] aidedsetonly CAM usage GLMM (show_cam ~ reliability*group + ...) ...")
 dfB_cam = dfB.copy()
 dfB_cam["show_cam"] = pd.to_numeric(dfB_cam["show_cam"], errors="coerce").fillna(0).astype(int)
 
@@ -1190,15 +1572,15 @@ res_cam = m_cam.fit(
     summarize=True,
     control="optimizer='bobyqa', optCtrl=list(maxfun=200000)",
 )
-with open(os.path.join(OUTDIR, "glmm_setB_cam_usage_secondary_summary.txt"), "w") as f:
+with open(os.path.join(OUTDIR, "glmm_aidedsetonly_cam_usage_secondary_summary.txt"), "w") as f:
     f.write("FORMULA: " + cam_formula + "\n\n")
     f.write(str(res_cam))
-m_cam.coefs.to_csv(os.path.join(OUTDIR, "table_glmm_setB_cam_usage_secondary_coefs.csv"), index=False)
+m_cam.coefs.to_csv(os.path.join(OUTDIR, "table_glmm_aidedsetonly_cam_usage_secondary_coefs.csv"), index=False)
 
 # =========================
-# SECONDARY (RECOMMENDED): Sensitivity/Specificity via stratified GLMMs (SetB)
+# SECONDARY (RECOMMENDED): Sensitivity/Specificity via stratified GLMMs (aidedsetonly)
 # =========================
-print("\n[SECONDARY] SetB stratified GLMMs for Sensitivity (y_true==1) and Specificity (y_true==0) ...")
+print("\n[SECONDARY] aidedsetonly stratified GLMMs for Sensitivity (y_true==1) and Specificity (y_true==0) ...")
 
 def fit_stratified_correctness(df_in: pd.DataFrame, tag: str):
     d = df_in.copy()
@@ -1211,32 +1593,32 @@ def fit_stratified_correctness(df_in: pd.DataFrame, tag: str):
         summarize=True,
         control="optimizer='bobyqa', optCtrl=list(maxfun=200000)",
     )
-    with open(os.path.join(OUTDIR, f"glmm_setB_{tag}_summary.txt"), "w") as f:
+    with open(os.path.join(OUTDIR, f"glmm_aidedsetonly_{tag}_summary.txt"), "w") as f:
         f.write("FORMULA: " + formula + "\n\n")
         f.write(str(res))
-    m.coefs.to_csv(os.path.join(OUTDIR, f"table_glmm_setB_{tag}_coefs.csv"), index=False)
+    m.coefs.to_csv(os.path.join(OUTDIR, f"table_glmm_aidedsetonly_{tag}_coefs.csv"), index=False)
 
 fit_stratified_correctness(dfB[dfB["y_true"] == 1].copy(), "sensitivity_ytrue1")
 fit_stratified_correctness(dfB[dfB["y_true"] == 0].copy(), "specificity_ytrue0")
 
 # =========================
-# SUPPLEMENT: SetB sensitivity checks (period, random slope, case-mix, GEE, LOO/LONO, permutation)
+# SUPPLEMENT: aidedsetonly sensitivity checks (period, random slope, case-mix, GEE, LOO/LONO, permutation)
 # =========================
-print("\n[SUPP] SetB + aided_period adjustment ...")
-mB_p, resB_p, fB_p = fit_setB_glmm(dfB, add_reader_slope=False, add_period=True, add_case_mix=False)
-with open(os.path.join(OUTDIR, "glmm_setB_plus_period_summary.txt"), "w") as f:
+print("\n[SUPP] aidedsetonly + aided_period adjustment ...")
+mB_p, resB_p, fB_p = fit_aidedsetonly_glmm(dfB, add_reader_slope=False, add_period=True, add_case_mix=False)
+with open(os.path.join(OUTDIR, "glmm_aidedsetonly_plus_period_summary.txt"), "w") as f:
     f.write("FORMULA: " + fB_p + "\n\n")
     f.write(str(resB_p))
-mB_p.coefs.to_csv(os.path.join(OUTDIR, "table_glmm_setB_plus_period_coefs.csv"), index=False)
+mB_p.coefs.to_csv(os.path.join(OUTDIR, "table_glmm_aidedsetonly_plus_period_coefs.csv"), index=False)
 
 print("[SUPP] Trying random slope (1 + reliability|reader) ...")
 try:
-    mB_rs, resB_rs, fB_rs = fit_setB_glmm(dfB, add_reader_slope=True, add_period=False, add_case_mix=False)
-    with open(os.path.join(OUTDIR, "glmm_setB_random_slope_summary.txt"), "w") as f:
+    mB_rs, resB_rs, fB_rs = fit_aidedsetonly_glmm(dfB, add_reader_slope=True, add_period=False, add_case_mix=False)
+    with open(os.path.join(OUTDIR, "glmm_aidedsetonly_random_slope_summary.txt"), "w") as f:
         f.write("FORMULA: " + fB_rs + "\n\n")
         f.write(str(resB_rs))
 except Exception as e:
-    with open(os.path.join(OUTDIR, "glmm_setB_random_slope_FAILED.txt"), "w") as f:
+    with open(os.path.join(OUTDIR, "glmm_aidedsetonly_random_slope_FAILED.txt"), "w") as f:
         f.write(repr(e))
 
 # Case-mix adjustment (if available)
@@ -1284,7 +1666,7 @@ loo_rows = [get_interaction_snapshot(mB, "FULL")]
 for rd in sorted(dfB["reader"].unique()):
     dsub = dfB[dfB["reader"] != rd].copy()
     try:
-        m_tmp, _, _ = fit_setB_glmm(dsub, add_reader_slope=False, add_period=False, add_case_mix=False)
+        m_tmp, _, _ = fit_aidedsetonly_glmm(dsub, add_reader_slope=False, add_period=False, add_case_mix=False)
         loo_rows.append(get_interaction_snapshot(m_tmp, f"LOO_drop_{rd}"))
     except Exception as e:
         loo_rows.append({"tag": f"LOO_drop_{rd}", "error": repr(e)})
@@ -1295,13 +1677,13 @@ lono_rows = [get_interaction_snapshot(mB, "FULL")]
 for rd in neo_readers:
     dsub = dfB[dfB["reader"] != rd].copy()
     try:
-        m_tmp, _, _ = fit_setB_glmm(dsub, add_reader_slope=False, add_period=False, add_case_mix=False)
+        m_tmp, _, _ = fit_aidedsetonly_glmm(dsub, add_reader_slope=False, add_period=False, add_case_mix=False)
         lono_rows.append(get_interaction_snapshot(m_tmp, f"LONO_drop_{rd}"))
     except Exception as e:
         lono_rows.append({"tag": f"LONO_drop_{rd}", "error": repr(e)})
 pd.DataFrame(lono_rows).to_csv(os.path.join(OUTDIR, "audit_LONO_interaction_stability.csv"), index=False)
 
-# Permutation LRT for interaction (SetB)
+# Permutation LRT for interaction (aidedsetonly)
 import random
 
 def permute_case_reliability(dfB_in: pd.DataFrame, stratify_by_y: bool = True, seed: int = 0) -> pd.DataFrame:
@@ -1439,10 +1821,10 @@ res_time = m_time.fit(
     summarize=True,
     control="optimizer='bobyqa', optCtrl=list(maxfun=200000)",
 )
-with open(os.path.join(OUTDIR, "lmm_setB_logtime_mechanism_summary.txt"), "w") as f:
+with open(os.path.join(OUTDIR, "lmm_aidedsetonly_logtime_mechanism_summary.txt"), "w") as f:
     f.write("FORMULA: " + time_mech_formula + "\n\n")
     f.write(str(res_time))
-m_time.coefs.to_csv(os.path.join(OUTDIR, "table_lmm_setB_logtime_mechanism_coefs.csv"), index=False)
+m_time.coefs.to_csv(os.path.join(OUTDIR, "table_lmm_aidedsetonly_logtime_mechanism_coefs.csv"), index=False)
 
 print("\n[MECH] Phenotype estimands (AI-wrong subset) with reader bootstrap ...")
 def bootstrap_reader_cluster(df_in: pd.DataFrame, value_col: str, n_boot=2000, seed=0):
@@ -1487,7 +1869,7 @@ for g in GROUP_ORDER:
                 "sent_ci_high": se_hi,
             }
         )
-pd.DataFrame(rows_out).to_csv(os.path.join(OUTDIR, "table_setB_phenotype_estimands_bootstrap.csv"), index=False)
+pd.DataFrame(rows_out).to_csv(os.path.join(OUTDIR, "table_aidedsetonly_phenotype_estimands_bootstrap.csv"), index=False)
 
 
 # # # =========================
@@ -1677,10 +2059,10 @@ if len(boot_rates) > 0:
     mech_ci.to_csv(os.path.join(OUTDIR, "table_mechanism_rates_CI.csv"), index=False)
 
 # =========================
-# CONTEXTUAL FIGURES (plots from your original pipeline): forest vs unaided, ROC, HCI, time bars, trust/vigilance
+# primary_full FIGURES (plots from your original pipeline): forest vs unaided, ROC, HCI, time bars, trust/vigilance
 #   Keep these, but in manuscript label the vs-unaided forest as Supplement/Exploratory.
 # =========================
-print("\n[FIG] Contextual contrasts (condition within group) for vs-unaided forest (Supplement) ...")
+print("\n[FIG] primary_full contrasts (condition within group) for vs-unaided forest (Supplement) ...")
 contrasts_out = glmm_model.post_hoc(
     marginal_vars="condition",
     grouping_vars="group",
@@ -1689,7 +2071,7 @@ contrasts_out = glmm_model.post_hoc(
 
 contrasts_df = contrasts_out[1] if isinstance(contrasts_out, tuple) and len(contrasts_out) > 1 else contrasts_out
 contrasts_df = contrasts_df.copy()
-contrasts_df.to_csv(os.path.join(OUTDIR, "table_glmm_contrasts_contextual_RAW.csv"), index=False)
+contrasts_df.to_csv(os.path.join(OUTDIR, "table_glmm_contrasts_primary_full_RAW.csv"), index=False)
 
 grp_col = pick_col(contrasts_df, ["group", "Group"])
 con_col = pick_col(contrasts_df, ["Contrast", "contrast", "condition"])
@@ -1738,8 +2120,58 @@ for grp in GROUP_ORDER:
         forest_rows.append({"Group": grp, "Contrast": label, "OR": OR, "Lower": L, "Upper": U, "P": pval, "Sig": p_to_label(pval)})
 
 forest_tbl = pd.DataFrame(forest_rows)
-forest_tbl.to_csv(os.path.join(OUTDIR, "table_forest_contextual_vs_unaided.csv"), index=False)
+forest_tbl.to_csv(os.path.join(OUTDIR, "table_forest_primary_full_vs_unaided.csv"), index=False)
 
+# def plot_forest_plot(df_forest: pd.DataFrame, filename: str):
+#     fig, ax = plt.subplots(figsize=FIG_FOREST, constrained_layout=True)
+#     y_centers = np.arange(len(GROUP_ORDER))[::-1]
+#     ax.set_xscale("log")
+
+#     for i, grp in enumerate(GROUP_ORDER):
+#         y_c = y_centers[i]
+#         sub = df_forest[df_forest["Group"] == grp]
+#         if len(sub) == 0:
+#             continue
+
+#         rel = sub[sub["Contrast"].str.contains("Reliable", case=False)].iloc[0]
+#         ax.errorbar(
+#             rel["OR"], y_c + 0.15,
+#             xerr=[[rel["OR"] - rel["Lower"]], [rel["Upper"] - rel["OR"]]],
+#             fmt="o", color=COL["optimized"], capsize=4, lw=1.4
+#         )
+#         ax.text(rel["Upper"] * 1.07, y_c + 0.15, f'{rel["OR"]:.2f} [{rel["Lower"]:.2f}–{rel["Upper"]:.2f}] {rel["Sig"]}',
+#                 va="center", fontsize=9.3, color=COL["optimized"])
+
+#         unr = sub[sub["Contrast"].str.contains("Unreliable", case=False)].iloc[0]
+#         ax.errorbar(
+#             unr["OR"], y_c - 0.15,
+#             xerr=[[unr["OR"] - unr["Lower"]], [unr["Upper"] - unr["OR"]]],
+#             fmt="s", color=COL["unreliable"], capsize=4, lw=1.4
+#         )
+#         ax.text(unr["Upper"] * 1.07, y_c - 0.15, f'{unr["OR"]:.2f} [{unr["Lower"]:.2f}–{unr["Upper"]:.2f}] {unr["Sig"]}',
+#                 va="center", fontsize=9.3, color=COL["unreliable"])
+
+#     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0, alpha=0.6)
+#     ax.set_yticks(y_centers)
+#     ax.set_yticklabels(GROUP_ORDER, fontweight="bold")
+#     ax.set_xlabel("Odds Ratio vs Unaided (95% CI)")
+#     xmin = max(0.1, float(df_forest["Lower"].min()) * 0.8)
+#     xmax = float(df_forest["Upper"].max()) * 1.5
+#     ax.set_xlim(xmin, xmax)
+
+
+#     # custom_lines = [
+#     #     Line2D([0], [0], color=COL["optimized"], marker="o", lw=0, markersize=7, label="Reliable AI"),
+#     #     Line2D([0], [0], color=COL["unreliable"], marker="s", lw=0, markersize=7, label="Unreliable AI"),
+#     # ]
+#     custom_lines = [
+#         Line2D([0], [0], color=COL["optimized"], marker="o", lw=0, markersize=7, label="Reliable AI"),
+#         Line2D([0], [0], color=COL["unreliable"], marker="s", lw=0, markersize=7, label="Error-Injected AI"),
+#     ]
+#     ax.legend(handles=custom_lines, frameon=False, loc="lower right")
+#     savefig(filename)
+
+# plot_forest_plot(forest_tbl, "fig_forest_primary_full_vs_unaided.tif")
 def plot_forest_plot(df_forest: pd.DataFrame, filename: str):
     fig, ax = plt.subplots(figsize=FIG_FOREST, constrained_layout=True)
     y_centers = np.arange(len(GROUP_ORDER))[::-1]
@@ -1770,17 +2202,25 @@ def plot_forest_plot(df_forest: pd.DataFrame, filename: str):
                 va="center", fontsize=9.3, color=COL["unreliable"])
 
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0, alpha=0.6)
+    
+    # --- FIX STARTS HERE ---
+    # 1. Set the specific tick locations
+    ax.set_xticks([0.1, 0.5, 1, 2, 5, 10])
+    
+    # 2. Uncomment and configure the formatter to use plain numbers (Scalar)
+    #    instead of the default LogFormatter (which does 10^0)
+    formatter = mpl.ticker.ScalarFormatter()
+    formatter.set_scientific(False) # Forces 1 instead of 1e0
+    ax.get_xaxis().set_major_formatter(formatter)
+    # --- FIX ENDS HERE ---
+
     ax.set_yticks(y_centers)
     ax.set_yticklabels(GROUP_ORDER, fontweight="bold")
-    ax.set_xlabel("Odds Ratio vs Unaided (95% CI) [CONTEXTUAL/SUPPLEMENT]")
+    ax.set_xlabel("Odds Ratio vs Unaided (95% CI)")
     xmin = max(0.1, float(df_forest["Lower"].min()) * 0.8)
     xmax = float(df_forest["Upper"].max()) * 1.5
     ax.set_xlim(xmin, xmax)
 
-    # custom_lines = [
-    #     Line2D([0], [0], color=COL["optimized"], marker="o", lw=0, markersize=7, label="Reliable AI"),
-    #     Line2D([0], [0], color=COL["unreliable"], marker="s", lw=0, markersize=7, label="Unreliable AI"),
-    # ]
     custom_lines = [
         Line2D([0], [0], color=COL["optimized"], marker="o", lw=0, markersize=7, label="Reliable AI"),
         Line2D([0], [0], color=COL["unreliable"], marker="s", lw=0, markersize=7, label="Error-Injected AI"),
@@ -1788,7 +2228,7 @@ def plot_forest_plot(df_forest: pd.DataFrame, filename: str):
     ax.legend(handles=custom_lines, frameon=False, loc="lower right")
     savefig(filename)
 
-plot_forest_plot(forest_tbl, "fig_forest_contextual_vs_unaided.tif")
+plot_forest_plot(forest_tbl, "fig_forest_primary_full_vs_unaided.tif")
 
 # =========================
 # ROC: operating-point shifts + reliable AI curve + AI points (unchanged)
@@ -2055,6 +2495,111 @@ ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2
 
 savefig("fig_hci_types_stacked.tif")
 
+# =========================
+# HCI TYPES STACKED BARS (UPDATED: Success vs Failure Order)
+# =========================
+print("\n[FIG] Generating HCI Stacked Bar Chart (Ordered: 1, 3, 2, 4)...")
+
+# 1. Prepare Data
+hci = df_aid[df_aid["condition"].isin(["optimized", "unreliable"])].copy()
+hci = hci[hci["hci_type"].isin([1, 2, 3, 4])].copy()
+
+# Calculate counts and proportions
+hci_tab = hci.groupby(["group", "condition", "hci_type"]).size().reset_index(name="count")
+hci_tab["total"] = hci_tab.groupby(["group", "condition"])["count"].transform("sum")
+hci_tab["prop"] = hci_tab["count"] / hci_tab["total"]
+
+# Pivot: Rows = Group/Condition, Cols = HCI Type
+pivot = hci_tab.pivot_table(index=["group", "condition"], columns="hci_type", values="prop", fill_value=0).reset_index()
+
+# Ensure categorical ordering
+pivot["group"] = pd.Categorical(pivot["group"], GROUP_ORDER, ordered=True)
+pivot["condition"] = pd.Categorical(pivot["condition"], ["optimized", "unreliable"], ordered=True)
+pivot = pivot.sort_values(["group", "condition"]).reset_index(drop=True)
+
+# 2. Setup Plot
+fig, ax = plt.subplots(figsize=FIG_HCI, constrained_layout=True)
+x = np.arange(len(pivot))
+bottom = np.zeros(len(pivot))
+
+# --- CONFIG: NEW ORDER 1 -> 3 -> 2 -> 4 ---
+# Rationale: Type 1 + Type 3 = Human Correct (Bottom stack)
+#            Type 2 + Type 4 = Human Incorrect (Top stack)
+stack_order = [1, 3, 2, 4] 
+
+type_label = {
+    1: "Type 1: Agreement w/ Correct AI\n(Both Correct)",
+    3: "Type 3: Sentinel Behavior\n(Reader Correct, AI Wrong)",
+    2: "Type 2: Disagreement w/ Correct AI\n(Reader Wrong, AI Correct)",
+    4: "Type 4: Automation Bias\n(Both Wrong)"
+}
+
+# Colors matching your manuscript palette
+type_color = {
+    1: COL["type1"], # Blue
+    3: COL["type3"], # Green (Sentinel) -> Putting successes together
+    2: COL["type2"], # Orange
+    4: COL["type4"]  # Red (Bias)
+}
+
+# 3. Plotting Loop
+for t_ in stack_order:
+    # Extract values for this HCI type across all groups/conditions
+    if t_ in pivot.columns:
+        vals = pivot[t_].values
+    else:
+        vals = np.zeros(len(pivot))
+    
+    # Plot bar segment
+    bars = ax.bar(x, vals, bottom=bottom, color=type_color[t_], label=type_label[t_], 
+                  alpha=0.9, width=0.65, edgecolor='white', linewidth=0.5)
+    
+    # --- ADD PERCENTAGE LABELS INSIDE BARS ---
+    # Only label if segment is large enough (> 4%) to be readable
+    for idx, rect in enumerate(bars):
+        height = rect.get_height()
+        if height > 0.04: 
+            ax.text(rect.get_x() + rect.get_width()/2., bottom[idx] + height/2.,
+                    f"{height:.1%}",
+                    ha='center', va='center', color='white', fontsize=9, fontweight='bold')
+
+    bottom += vals
+
+# 4. Axis Formatting
+# Map internal codes to display names
+cond_map = {
+    "optimized": "Reliable AI",
+    "unreliable": "Error-Injected AI"
+}
+
+xlabels = []
+for _, r in pivot.iterrows():
+    grp_clean = r['group'].replace(' ', '\n') # Wrap text
+    cond_clean = cond_map.get(r['condition'], r['condition'])
+    xlabels.append(f"{grp_clean}\n({cond_clean})")
+
+ax.set_xticks(x)
+ax.set_xticklabels(xlabels, fontsize=11)
+ax.set_ylabel("Proportion of Cases", fontsize=12)
+ax.set_ylim(0, 1.05) # Slight headroom
+ax.set_title("Distribution of Human-AI Interaction Types (Outcomes)", fontsize=14, pad=15)
+
+# Add a horizontal line to separate Correct (1+3) from Incorrect (2+4) roughly? 
+# (Not strictly possible with variable heights, but the color grouping helps)
+
+# Legend positioning (Outside to right, or bottom)
+# Reversing legend order to match stack (4 on top, 1 on bottom) visual intuition
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], frameon=True, loc="upper right", 
+          bbox_to_anchor=(1.35, 1.0), title="Interaction Type", fontsize=10)
+
+# 5. Save
+save_name = "fig_hci_types_stacked_reordered.tif"
+print(f"Saving {save_name}...")
+savefig(save_name)
+pivot.to_csv(os.path.join(OUTDIR, "table_hci_types_proportions.csv"), index=False)
+plt.close()
+
 # # =========================
 # # TIME: log-time by agree/disagree (descriptive plot; keep in supplement)
 # # =========================
@@ -2234,8 +2779,8 @@ print(f"Found {len(indeterminate_keys)} indeterminate cases to exclude.")
 dfB_clean = dfB[~dfB['file_key'].isin(indeterminate_keys)].copy()
 print(f"Rows before: {len(dfB)}, Rows after exclusion: {len(dfB_clean)}")
 
-# 3. Re-run the Set B Primary GLMM
-mB_sens, resB_sens, fB_sens = fit_setB_glmm(dfB_clean, add_reader_slope=False, add_period=False, add_case_mix=False)
+# 3. Re-run the aided change: SET B = Aided = we only refer to it as aided set instead of set B GLMM
+mB_sens, resB_sens, fB_sens = fit_aidedsetonly_glmm(dfB_clean, add_reader_slope=False, add_period=False, add_case_mix=False)
 
 # 4. Save Results
 with open(os.path.join(OUTDIR, "glmm_sensitivity_no_indeterminate_summary.txt"), "w") as f:
@@ -2244,9 +2789,407 @@ with open(os.path.join(OUTDIR, "glmm_sensitivity_no_indeterminate_summary.txt"),
     f.write(str(resB_sens))
 
 # 5. Extract Interaction Term for Report
-inter_row = mB_sens.coefs[mB_sens.coefs.index.str.contains("Unreliable") & mB_sens.coefs.index.str.contains("Neonatologist")]
+# inter_row = mB_sens.coefs[mB_sens.coefs.index.str.contains("Unreliable") & mB_sens.coefs.index.str.contains("Neonatologist")]
+inter_row = mB_sens.coefs[mB_sens.coefs.index.str.contains("reliability") & mB_sens.coefs.index.str.contains("Neonatologist")]
 print("Interaction (No Indeterminate):")
 print(inter_row)
+
+# ==========================================================
+# FIGURE S7: Large Saliency Map Mechanism Plot (Fixed Variable Name)
+# ==========================================================
+print("\n[FIG] Generating Figure S7 (Mechanism/CAM Usage)...")
+
+# 1. Prepare Data (Use df_fig7 to avoid overwriting main df)
+data = [
+    # Neonatologists
+    {'Group': 'Neonatologists', 'CAM': 'Not Viewed', 'AI': 'AI Wrong', 'Count': 61, 'Type': 3}, 
+    {'Group': 'Neonatologists', 'CAM': 'Not Viewed', 'AI': 'AI Wrong', 'Count': 11, 'Type': 4}, 
+    {'Group': 'Neonatologists', 'CAM': 'Not Viewed', 'AI': 'AI Correct', 'Count': 152, 'Type': 1}, 
+    {'Group': 'Neonatologists', 'CAM': 'Not Viewed', 'AI': 'AI Correct', 'Count': 6, 'Type': 2},  
+    {'Group': 'Neonatologists', 'CAM': 'Viewed', 'AI': 'AI Wrong', 'Count': 15, 'Type': 3},
+    {'Group': 'Neonatologists', 'CAM': 'Viewed', 'AI': 'AI Wrong', 'Count': 0, 'Type': 4},
+    {'Group': 'Neonatologists', 'CAM': 'Viewed', 'AI': 'AI Correct', 'Count': 5, 'Type': 1},
+    {'Group': 'Neonatologists', 'CAM': 'Viewed', 'AI': 'AI Correct', 'Count': 2, 'Type': 2},
+    
+    # Residents
+    {'Group': 'Radiology Residents', 'CAM': 'Not Viewed', 'AI': 'AI Wrong', 'Count': 49, 'Type': 3},
+    {'Group': 'Radiology Residents', 'CAM': 'Not Viewed', 'AI': 'AI Wrong', 'Count': 18, 'Type': 4},
+    {'Group': 'Radiology Residents', 'CAM': 'Not Viewed', 'AI': 'AI Correct', 'Count': 175, 'Type': 1},
+    {'Group': 'Radiology Residents', 'CAM': 'Not Viewed', 'AI': 'AI Correct', 'Count': 8, 'Type': 2},
+    {'Group': 'Radiology Residents', 'CAM': 'Viewed', 'AI': 'AI Wrong', 'Count': 61, 'Type': 3},
+    {'Group': 'Radiology Residents', 'CAM': 'Viewed', 'AI': 'AI Wrong', 'Count': 17, 'Type': 4},
+    {'Group': 'Radiology Residents', 'CAM': 'Viewed', 'AI': 'AI Correct', 'Count': 87, 'Type': 1},
+    {'Group': 'Radiology Residents', 'CAM': 'Viewed', 'AI': 'AI Correct', 'Count': 5, 'Type': 2},
+
+    # Radiologists
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Not Viewed', 'AI': 'AI Wrong', 'Count': 98, 'Type': 3},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Not Viewed', 'AI': 'AI Wrong', 'Count': 16, 'Type': 4},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Not Viewed', 'AI': 'AI Correct', 'Count': 281, 'Type': 1},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Not Viewed', 'AI': 'AI Correct', 'Count': 18, 'Type': 2},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Viewed', 'AI': 'AI Wrong', 'Count': 49, 'Type': 3},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Viewed', 'AI': 'AI Wrong', 'Count': 11, 'Type': 4},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Viewed', 'AI': 'AI Correct', 'Count': 28, 'Type': 1},
+    {'Group': 'Pediatric Radiologists', 'CAM': 'Viewed', 'AI': 'AI Correct', 'Count': 3, 'Type': 2},
+]
+
+df_fig7 = pd.DataFrame(data)
+
+type_labels = {
+    1: 'Agreement with\ncorrect AI',
+    2: 'Disagreement with\ncorrect AI',
+    3: 'Override of\nincorrect AI',
+    4: 'Agreement with\nincorrect AI'
+}
+df_fig7['Interaction'] = df_fig7['Type'].map(type_labels)
+df_fig7['AI_Scenario'] = df_fig7['Type'].apply(lambda x: 'AI Correct' if x in [1, 2] else 'AI Wrong')
+totals = df_fig7.groupby(['Group', 'CAM', 'AI_Scenario'])['Count'].transform('sum')
+df_fig7['Percentage'] = (df_fig7['Count'] / totals) * 100
+
+# --- PLOTTING CONFIGURATION ---
+import seaborn as sns
+sns.set_style("whitegrid")
+sns.set_context("talk", font_scale=1.0) 
+
+palette = {
+    'Agreement with\ncorrect AI': "#4E79A7",
+    'Disagreement with\ncorrect AI': "#F28E2B",
+    'Override of\nincorrect AI': "#59A14F",
+    'Agreement with\nincorrect AI': "#E15759"
+}
+
+df_wrong = df_fig7[df_fig7['AI_Scenario'] == 'AI Wrong'].copy()
+
+g = sns.catplot(
+    data=df_wrong, kind="bar",
+    x="Percentage", y="CAM", hue="Interaction", col="Group",
+    palette=palette,
+    height=5.5,
+    aspect=1.1,
+    legend_out=True
+)
+
+g.set_axis_labels("Percentage of AI-Wrong Cases (%)", "Saliency Map Usage")
+g.set_titles("{col_name}", fontweight='bold')
+
+for ax in g.axes.flat:
+    for p in ax.patches:
+        width = p.get_width()
+        if width > 0:
+            y = p.get_y() + p.get_height() / 2.
+            if width > 10:
+                x = width
+                align = 'right'
+                offset = (-8, 0)
+                color = 'white'
+            else:
+                x = width
+                align = 'left'
+                offset = (8, 0)
+                color = 'black'
+            ax.annotate(f'{width:.1f}%', (x, y), xytext=offset, textcoords='offset points',
+                        ha=align, va='center', fontsize=12, color=color, weight='bold')
+
+plt.savefig(os.path.join(OUTDIR, "fig5_visual_explainability_mechanism.tif"), format='tiff', dpi=300, bbox_inches='tight', pil_kwargs={"compression": "tiff_lzw"})
+plt.close()
+
+
+# ==========================================================
+# PROF REQUEST: Consolidated Performance Table with 95% CIs
+# ==========================================================
+print("\n[REQ] Generating Table 2 (Consolidated Performance)...")
+
+import scipy.stats as st
+from sklearn.utils import resample
+from sklearn.metrics import roc_auc_score
+
+# --- Helper: Bootstrap CI for AI (Case-level resampling) ---
+def get_ai_bootstrap_ci(y_true, y_prob, metric_func, n_boot=2000):
+    """Calculates 95% CI for AI using case resampling."""
+    stats = []
+    y_t = np.array(y_true)
+    y_p = np.array(y_prob)
+    rng = np.random.default_rng(42)
+    for _ in range(n_boot):
+        # Resample indices with replacement
+        indices = rng.choice(len(y_t), size=len(y_t), replace=True)
+        t_boot = y_t[indices]
+        p_boot = y_p[indices]
+        if len(np.unique(t_boot)) < 2: continue # Skip if only 1 class present
+        stats.append(metric_func(t_boot, p_boot))
+    return np.percentile(stats, 2.5), np.percentile(stats, 97.5)
+
+# --- A. HUMAN READERS (Aggregate Reader Metrics) ---
+# We calculate metrics for EACH reader, then compute Mean/CI across readers in the group.
+# This treats "Readers" as the random effect, which is appropriate for summarizing group performance.
+reader_metrics = []
+for (grp, cond, rdr), sub in df.groupby(["group", "condition", "reader"]):
+    m = sens_spec_acc(sub["y_true"], sub["reader_pred"])
+    # For binary readers, AUC is Balanced Accuracy = (Sens+Spec)/2
+    binary_auc = (m["sens"] + m["spec"]) / 2.0
+    reader_metrics.append({
+        "group": grp, "condition": cond, "reader": rdr,
+        "auc": binary_auc, "sens": m["sens"], "spec": m["spec"]
+    })
+df_rdr = pd.DataFrame(reader_metrics)
+
+human_rows = []
+for (grp, cond), sub in df_rdr.groupby(["group", "condition"]):
+    stats = {}
+    n_readers = len(sub)
+    for metric in ["auc", "sens", "spec"]:
+        mean_val = sub[metric].mean()
+        sem_val = sub[metric].sem()
+        # 95% CI using t-distribution
+        if n_readers > 1:
+            ci = st.t.interval(0.95, df=n_readers-1, loc=mean_val, scale=sem_val)
+        else:
+            ci = (np.nan, np.nan)
+            
+        # Format strings
+        if metric == "auc":
+            stats[metric] = f"{mean_val:.2f} ({ci[0]:.2f}–{ci[1]:.2f})"
+        else:
+            # Percentage for Sens/Spec
+            stats[metric] = f"{mean_val*100:.1f}" # Prof asked for simple % for Sens/Spec in example, but we can add CIs if needed
+            # If you want CIs for Sens/Spec too, uncomment below:
+            # stats[metric] = f"{mean_val*100:.1f} ({ci[0]*100:.1f}–{ci[1]*100:.1f})"
+    
+    human_rows.append({
+        "Reader Group": grp, "Condition": cond,
+        "AUC (95% CI)": stats["auc"],
+        "Sensitivity (%)": stats["sens"],
+        "Specificity (%)": stats["spec"]
+    })
+
+# --- B. AI MODELS (Bootstrap Cases) ---
+# We need unique cases to evaluate AI standalone
+ai_df = df.drop_duplicates(subset=["filename"])
+ai_rows = []
+
+# Define AI configs: Name, Prediction Column (Binary), Probability Column (Continuous)
+# Note: In your dataset, 'ai_pred_optimized' seems to be the probability score (0-1) or binary? 
+# Based on your setup, it looks like 'ai_pred_optimized' is the score.
+ai_configs = [
+    {"name": "Reliable", "prob": "ai_pred_optimized"},
+    {"name": "Error-Injected", "prob": "ai_pred_unreliable"} 
+]
+
+for config in ai_configs:
+    # Filter valid data
+    valid = ai_df.dropna(subset=["y_true", config["prob"]])
+    yt = valid["y_true"].values
+    yp = valid[config["prob"]].values
+    
+    # Threshold for binary metrics (Standard 0.5 cut)
+    ybin = (yp >= 0.5).astype(int)
+    
+    # 1. AUC
+    auc_val = roc_auc_score(yt, yp)
+    auc_ci = get_ai_bootstrap_ci(yt, yp, roc_auc_score)
+    
+    # 2. Sens/Spec
+    m = sens_spec_acc(yt, ybin)
+    # We don't usually put CIs on single-model Sens/Spec in summary tables unless requested, 
+    # but we can. For now, matching the human format (just mean or mean+CI).
+    
+    ai_rows.append({
+        "Reader Group": "AI Model Alone",
+        "Condition": config["name"],
+        "AUC (95% CI)": f"{auc_val:.2f} ({auc_ci[0]:.2f}–{auc_ci[1]:.2f})",
+        "Sensitivity (%)": f"{m['sens']*100:.1f}",
+        "Specificity (%)": f"{m['spec']*100:.1f}"
+    })
+
+# --- C. MERGE & SAVE ---
+table2 = pd.DataFrame(human_rows + ai_rows)
+
+# Rename conditions to Manuscript terms
+cond_map = {
+    "unaided": "Unaided", 
+    "optimized": "Reliable AI", 
+    "unreliable": "Error-Injected AI",
+    "Reliable": "Reliable AI",
+    "Error-Injected": "Error-Injected AI"
+}
+table2["Condition"] = table2["Condition"].replace(cond_map)
+
+# Custom Sort
+grp_order = ["Pediatric Radiologist", "Neonatologist", "Radiology Resident", "AI Model Alone"]
+table2["Reader Group"] = pd.Categorical(table2["Reader Group"], categories=grp_order, ordered=True)
+table2 = table2.sort_values(["Reader Group", "Condition"])
+
+table2.to_csv(os.path.join(OUTDIR, "Table2_Diagnostic_Performance.csv"), index=False)
+print("Saved Table2_Diagnostic_Performance.csv")
+
+
+# ==========================================================
+# 2. GENERATE FIGURE 3 (Forest Plot with Fixed Axis)
+# ==========================================================
+print("\n[REQ] Generating Figure 3 (Forest Plot) with Scalar Axis...")
+
+# Ensure we use the correct dataframe (from the Full Contextual Model)
+# If 'forest_tbl' is not in memory from previous steps, we reconstruct it briefly here 
+# (assuming contrasts_df exists from the full model run)
+if 'contrasts_df' not in locals():
+    print("[WARN] contrasts_df not found. Skipping plot regeneration. Ensure GLMM block ran.")
+else:
+    # Re-build forest_tbl logic just to be safe
+    # (Copying logic from your script)
+    forest_rows_regen = []
+    for grp in GROUP_ORDER:
+        sub = contrasts_df[contrasts_df[grp_col] == grp].copy()
+        if len(sub) == 0: continue
+        for cond, label in [("optimized", "Reliable AI vs Unaided"), ("unreliable", "Error-Injected AI vs Unaided")]: # Updated label
+            rows_ = sub[
+                sub[con_col].astype(str).str.contains(cond, case=False)
+                & sub[con_col].astype(str).str.contains("unaided", case=False)
+            ]
+            if len(rows_) == 0: continue
+            row = rows_.iloc[0]
+            OR = float(row["OR_raw"])
+            L = float(row["Lower_raw"])
+            U = float(row["Upper_raw"])
+            # Invert if contrast is backwards
+            cstr = str(row[con_col]).lower().replace(" ", "")
+            if ("unaided-" in cstr) and (f"-{cond}" in cstr):
+                OR = 1.0 / OR
+                L, U = 1.0 / U, 1.0 / L
+            forest_rows_regen.append({"Group": grp, "Contrast": label, "OR": OR, "Lower": L, "Upper": U})
+    
+    forest_tbl_fixed = pd.DataFrame(forest_rows_regen)
+
+    # Plotting Function
+    def plot_forest_plot_fixed(df_forest, filename):
+        fig, ax = plt.subplots(figsize=FIG_FOREST, constrained_layout=True)
+        y_centers = np.arange(len(GROUP_ORDER))[::-1]
+        ax.set_xscale("log")
+
+        for i, grp in enumerate(GROUP_ORDER):
+            y_c = y_centers[i]
+            sub = df_forest[df_forest["Group"] == grp]
+            if len(sub) == 0: continue
+
+            # Reliable
+            rel = sub[sub["Contrast"].str.contains("Reliable", case=False)].iloc[0]
+            ax.errorbar(rel["OR"], y_c + 0.15, 
+                        xerr=[[rel["OR"] - rel["Lower"]], [rel["Upper"] - rel["OR"]]], 
+                        fmt="o", color=COL["optimized"], capsize=4, lw=1.4)
+            ax.text(rel["Upper"]*1.1, y_c + 0.15, f'{rel["OR"]:.2f}', va="center", fontsize=9, color=COL["optimized"])
+
+            # Unreliable (Error-Injected)
+            # Match string "Error-Injected" or "Unreliable"
+            unr_rows = sub[sub["Contrast"].str.contains("Error-Injected|Unreliable", case=False, regex=True)]
+            if len(unr_rows) > 0:
+                unr = unr_rows.iloc[0]
+                ax.errorbar(unr["OR"], y_c - 0.15, 
+                            xerr=[[unr["OR"] - unr["Lower"]], [unr["Upper"] - unr["OR"]]], 
+                            fmt="s", color=COL["unreliable"], capsize=4, lw=1.4)
+                ax.text(unr["Upper"]*1.1, y_c - 0.15, f'{unr["OR"]:.2f}', va="center", fontsize=9, color=COL["unreliable"])
+
+        # FIX: Manually set xticks and format
+        ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0, alpha=0.6)
+        
+        # Scalar Formatter
+        ax.set_xticks([0.1, 0.5, 1, 2, 5, 10])
+        formatter = mpl.ticker.ScalarFormatter()
+        formatter.set_scientific(False)
+        ax.get_xaxis().set_major_formatter(formatter)
+        
+        ax.set_yticks(y_centers)
+        ax.set_yticklabels(GROUP_ORDER, fontweight="bold")
+        ax.set_xlabel("Odds Ratio vs. Unaided Baseline (95% CI)")
+        
+        # Legend
+        custom_lines = [
+            Line2D([0], [0], color=COL["optimized"], marker="o", lw=0, label="Reliable AI vs Unaided"),
+            Line2D([0], [0], color=COL["unreliable"], marker="s", lw=0, label="Error-Injected AI vs Unaided"),
+        ]
+        ax.legend(handles=custom_lines, frameon=False, loc="lower right")
+        
+        savefig(filename)
+
+    plot_forest_plot_fixed(forest_tbl_fixed, "fig_forest_primary_full_vs_unaided_FIXED.tif")
+
+
+# ==========================================================
+# 3. GENERATE FIGURE S7 (CAM Usage)
+# ==========================================================
+print("\n[REQ] Generating Figure S7 (Mechanism/CAM Usage)...")
+
+# Prepare Data (Hardcoded based on your clickstream analysis or calculated)
+# Assuming 'df_fig7' data structure from previous context
+# If you don't have df_fig7 calculated in this script, we can reconstruct it from 'df_aid'
+# Calculating from df_aid for accuracy:
+
+df_cam_analysis = df_aid[df_aid["condition"].isin(["optimized", "unreliable"])].copy()
+df_cam_analysis["AI_Status"] = np.where(df_cam_analysis["ai_correct"] == 1, "AI Correct", "AI Wrong")
+df_cam_analysis["CAM_Status"] = np.where(df_cam_analysis["show_cam"] == 1, "Viewed", "Not Viewed")
+
+# Group and count
+cam_summary = df_cam_analysis.groupby(["group", "CAM_Status", "AI_Status", "hci_type"]).size().reset_index(name="Count")
+
+# Map HCI Types
+type_labels = {
+    1: 'Agreement with\ncorrect AI',
+    2: 'Disagreement with\ncorrect AI',
+    3: 'Override of\nincorrect AI',
+    4: 'Agreement with\nincorrect AI'
+}
+cam_summary['Interaction'] = cam_summary['hci_type'].map(type_labels)
+
+# Calculate Percentages
+# Percentages should be within the (Group x CAM x AI_Status) block
+totals = cam_summary.groupby(['group', 'CAM_Status', 'AI_Status'])['Count'].transform('sum')
+cam_summary['Percentage'] = (cam_summary['Count'] / totals) * 100
+
+# Filter for AI Wrong only (as per Figure S7 request)
+df_wrong_cam = cam_summary[cam_summary['AI_Status'] == 'AI Wrong'].copy()
+
+# Plot
+sns.set_style("whitegrid")
+sns.set_context("talk", font_scale=1.0) 
+
+palette = {
+    'Agreement with\ncorrect AI': "#4E79A7",
+    'Disagreement with\ncorrect AI': "#F28E2B",
+    'Override of\nincorrect AI': "#59A14F",
+    'Agreement with\nincorrect AI': "#E15759"
+}
+
+g = sns.catplot(
+    data=df_wrong_cam, kind="bar",
+    x="Percentage", y="CAM_Status", hue="Interaction", col="group",
+    palette=palette,
+    height=5.5,
+    aspect=1.1,
+    legend_out=True,
+    col_order=GROUP_ORDER # Ensure correct order
+)
+
+g.set_axis_labels("Percentage of AI-Wrong Cases (%)", "Saliency Map Usage")
+g.set_titles("{col_name}", fontweight='bold')
+
+for ax in g.axes.flat:
+    for p in ax.patches:
+        width = p.get_width()
+        if width > 0:
+            y = p.get_y() + p.get_height() / 2.
+            # Label formatting
+            if width > 10:
+                x = width
+                align = 'right'
+                offset = (-8, 0)
+                color = 'white'
+            else:
+                x = width
+                align = 'left'
+                offset = (8, 0)
+                color = 'black'
+            ax.annotate(f'{width:.1f}%', (x, y), xytext=offset, textcoords='offset points',
+                        ha=align, va='center', fontsize=12, color=color, weight='bold')
+
+savefig("Figure_S7_CAM_Mechanism_Large.tif")
+
 
 print("\nDONE.")
 print("Outputs saved to:", os.path.abspath(OUTDIR))
