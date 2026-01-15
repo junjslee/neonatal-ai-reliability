@@ -10,6 +10,19 @@
 
 ---
 
+## 🖼️ Visual Abstract: The Sentinel Effect vs. Automation Bias
+
+![Graphical Abstract](figures/graphical_abstract.jpeg)
+
+**Visualizing the study's core behavioral discovery:**
+
+This illustration represents the divergent verification behaviors observed in our multi-center study:
+
+*   **Left (Automation Bias):** When interacting with **Reliable AI** (Blue stream), less experienced readers (Residents) tended to "offload" cognition. The smooth, accurate advice paradoxically reduced vigilance, leading to the acceptance of errors when they did occur.
+*   **Right (The Sentinel Effect):** When interacting with **Error-Injected AI** (Red/Glitchy stream), experts (Neonatologists) engaged a "cognitive forcing function." The presence of systematic AI errors triggered a high-vigilance mode, where experts actively used tools to refute the AI, acting as a safety shield for the patient.
+
+*Generated via NanoBanana based on the research paper's findings.*
+
 ## 👾 Model Architecture
 
 ![Model Arch](figures/rdino%20model_arch.png)
