@@ -1,5 +1,5 @@
 /_archive/
-/reader_study_ui
+/research_paper_ref
 
 # *.png
 # *.jpg
@@ -16,3 +16,12 @@
 # /reader_study_ui/reader_study_ui/final_reader_study_UI_prep_for_LJS.csv
 # /reader_study_ui/reader_study_ui/reader_study_ui/reader_study_UI_prep_for_LJS_07012025.csv
 # /reader_study_ui/reader_study_ui/reader_study_ui/reader_study_ui/reader_study_UI_prep_for_LJS_07012025.csv
+# Large manuscript figures (use PNGs for README display)
+*.tiff
+*.tif
+
+# Agent OS / Claude Code scaffold
+.claude/
+AGENTS.md
+CLAUDE.md
+docs/
