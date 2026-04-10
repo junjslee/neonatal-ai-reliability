@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this code, findings, or error-injection framework, please cite the paper below."
+title: "neonatal-ai-reliability"
+type: software
+authors:
+  - family-names: Lee
+    given-names: Junseong
+    alias: junjslee
+repository-code: https://github.com/junjslee/neonatal-ai-reliability
+url: https://neonatal-ai-sandbox.pages.dev/
+license: MIT
+date-released: "2026-04-09"
+keywords:
+  - neonatal pneumoperitoneum
+  - automation bias
+  - sentinel behavior
+  - human-AI interaction
+  - deep learning
+  - medical imaging
+  - radiology
+  - MRMC
+  - GLMM
+
+preferred-citation:
+  type: article
+  title: "Expertise modulates automation bias and sentinel behavior in human-AI collaborative diagnosis of neonatal pneumoperitoneum"
+  authors:
+    - family-names: Lee
+      given-names: Junseong
+  year: 2026
+  notes: "Under review"
