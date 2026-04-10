@@ -195,6 +195,7 @@ Experts used explainability maps selectively to *refute* the AI; trainees used t
 
 - **Source code** (preprocessing, model, training, evaluation, saliency, statistical analysis): [github.com/junjslee/neonatal-ai-reliability](https://github.com/junjslee/neonatal-ai-reliability)
 - **Educational sandbox:** [neonatal-ai-sandbox.pages.dev](https://neonatal-ai-sandbox.pages.dev/)
+- **Model checkpoints:** Both the Reliable AI and Error-Injected AI weights are included in this repository under `quantitative_analysis/standalone_model_performance/rad_dino/`. These are the exact checkpoints used in the reader study and can be used to reproduce inference results without retraining. Note: weights are derived from [microsoft/rad-dino](https://huggingface.co/microsoft/rad-dino) — verify base model license compliance before use.
 - **Raw image data:** Cannot be publicly redistributed (IRB/licensing); external validation set available via [AI-Hub](https://www.aihub.or.kr/)
 - **De-identified derived data** (reader metrics, AI predictions, consensus labels): Available upon request to corresponding authors
 

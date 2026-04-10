@@ -7,6 +7,7 @@
 *.csv
 *.docx
 *.txt
+!requirements.txt
 *.xlsx
 .DS_Store
 .ipynb_checkpoints
