@@ -23,5 +23,7 @@ SOFTWARE.
 ---
 
 Note on model weights: The fine-tuned RAD-DINO weights included in this
-repository are derived from microsoft/rad-dino. Users should verify
-compliance with the base model's license before use.
+repository are derived from microsoft/rad-dino (MIT License). The base
+model is shared for research purposes only and is not intended for
+clinical practice. These weights inherit that restriction — they are
+provided here solely for research reproducibility.
