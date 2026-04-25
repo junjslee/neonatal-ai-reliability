@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-04-25T01:24:44Z",
+  "core_question": "Can we re-enable the original pymer4 Lmer fit in the base conda env so R2-6 reading-time LMM and R2-8 error-type GLMM can be refit with Satterthwaite df and crossed random effects identical to the manuscript pipeline?",
+  "knowns": [
+    "base env has pymer4 0.x, rpy2, and R 4.x installed at /Users/junlee/miniconda3/lib/R",
+    "base env numpy is at 2.2.6 but matplotlib 3.6.2 and Bottleneck 1.3.7 compiled against numpy 1.x ABI, so their import fails with 'numpy.core.multiarray failed to import'",
+    "pymer4 imports matplotlib transitively, so matplotlib import failure blocks Lmer instantiation even though rpy2 itself may be fine",
+    "huggingface_env has clean numpy 2 plus matplotlib stack but no pymer4 or rpy2 installed",
+    "manuscript-pipeline reading-time LMM formula is log_time ~ disagree * reliability * group + pgy_within_5 + (1|reader) + (1|filename), crossed random effects fit with REML via lmerTest through pymer4"
+  ],
+  "unknowns": [
+    "If a test harness runs python -c from pymer4 models import Lmer print ok after the pip upgrade and the process returns non-zero exit code or stderr shows ImportError, the upgrade failed to restore pymer4 and fallback to statsmodels is required",
+    "If after the pip upgrade Lmer fit on the 1,400-row REML spec throws an rpy2 TypeError or crashes within 60 seconds, the rpy2 numpy2ri C-binding is broken by the numpy ABI shift and statsmodels fallback is required"
+  ],
+  "assumptions": [
+    "matplotlib >= 3.9 and Bottleneck >= 1.4 PyPI wheels ship with numpy 2 ABI bindings, so pip upgrade restores _ARRAY_API",
+    "rpy2 compiled against R 4.x in /Users/junlee/miniconda3/lib/R does not link to matplotlib or Bottleneck, so upgrading those leaves the rpy2 numpy2ri binding intact",
+    "no other base-env package pins matplotlib<3.8 as a hard constraint that pip upgrade would refuse"
+  ],
+  "disconfirmation": "If python -c import matplotlib bottleneck from pymer4 models import Lmer print ok exits non-zero after the upgrade, or if a Lmer fit smoke test throws rpy2 RRuntimeError within 60 seconds, abandon the pymer4 fix and fall back to statsmodels MixedLM for both R2-6 and R2-8.",
+  "verification_trace": {
+    "command": "conda run -n base python -c \"import matplotlib, bottleneck; from pymer4.models import Lmer; print('ok')\"",
+    "threshold_observable": "exit code == 0 within 30 seconds"
+  }
+}
