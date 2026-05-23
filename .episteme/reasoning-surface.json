@@ -32,14 +32,15 @@
     {"surface": "CITATION.cff", "audience": "GitHub 'Cite this repository' widget and Zenodo on release tagging", "consequence": "Author list errors propagate into archived metadata that is hard to retract once cached.", "status": "needs_update"},
     {"surface": "quantitative_analysis/reader_study_full_analysis.py Table 3 term_map", "audience": "reviewers verifying reproducibility against manuscript Table 3", "consequence": "Label drift surfaces as a visible mismatch during side-by-side review of the generated CSV vs the manuscript table.", "status": "needs_update"},
     {"surface": "docs/PROGRESS.md and docs/NEXT_STEPS.md", "audience": "future agent sessions (gitignored, not public)", "consequence": "Stale notes could let a later agent reintroduce the retracted +1.2/+3.1/+4.6 s values; mitigation is the explicit retraction note added this turn.", "status": "needs_update"},
-    {"surface": "downstream consumers (other scripts, CI, package installs)", "audience": "none in this repo", "consequence": "Zero — no integration test regression risk; the changed lines are presentation-layer strings.", "status": "not-applicable"}
+    {"surface": "downstream consumers (other scripts, CI, package installs)", "audience": "none in this repo", "consequence": "Zero — no integration test regression risk; the changed lines are presentation-layer strings.", "status": "not-applicable", "rationale": "There are no downstream consumers of the changed files inside this repo: no CI workflow imports README.md or the term_map dict, no other Python module depends on reader_study_full_analysis.py as a library (it is a top-down script), and no packaging metadata references CITATION.cff. So the blast-radius entry is structurally empty rather than deferred — there is nothing left to update on this axis."}
   ],
   "sync_plan": [
-    "Stage README.md + CITATION.cff + quantitative_analysis/reader_study_full_analysis.py + quantitative_analysis/revision_analyses/README.md and rely on the auto-checkpoint hook to commit.",
-    "Hook creates one or two chkpt commits on local main; push the resulting head plus the earlier-session chkpt that has not yet shipped (5efa600) to origin/main.",
-    "Verify post-push by listing origin/main commits and confirming the four files appear in HEAD's diff stat.",
-    "docs/PROGRESS.md and docs/NEXT_STEPS.md already updated in this turn — no further doc sync needed.",
-    "The .episteme/reasoning-surface.json local-only edit stays untouched (path is under .episteme/ which is local-only state)."
+    {"surface": "git index (staged files)", "step": "stage", "action": "git add README.md, CITATION.cff, quantitative_analysis/reader_study_full_analysis.py, quantitative_analysis/revision_analyses/README.md", "status": "done"},
+    {"surface": "local main branch", "step": "commit", "action": "conventional commit 'docs(npj): reflect round-1 revision in public README, CITATION, and analysis labels'", "status": "done", "commit_sha": "29ab5ad"},
+    {"surface": "origin/main on GitHub", "step": "push", "action": "git push origin main", "status": "done", "target_ref": "5efa600..29ab5ad"},
+    {"surface": "post-push verification", "step": "verify", "action": "confirm 29ab5ad is HEAD of origin/main and four files appear in its diff stat", "status": "done"},
+    {"surface": "docs/PROGRESS.md + docs/NEXT_STEPS.md + docs/PLAN.md", "step": "doc-sync", "action": "updated with the second-pass corrections; PLAN risk-list now says 19-author CITATION list is in, only DOI pending", "status": "done"},
+    {"surface": ".episteme/reasoning-surface.json", "step": "surface-local-only", "action": "stays in local .episteme/ (gitignored); chkpt hook may capture it but it never reaches origin/main", "status": "done"}
   ],
   "deferred_discoveries": [
     "revision_analyses/r2_8_error_type_stratification.py prose draft names the supp figure 'Supplementary Figure SX'; manuscript actually labels it 'Supplementary Fig. 9'. Cosmetic, low impact — script is for the data owner's rebuttal letter, not public-facing.",
