@@ -1,24 +1,51 @@
 {
-  "timestamp": "2026-05-23T22:00:00Z",
-  "core_question": "Is the npj DM round-1 revision update (README, CITATION.cff, revision_analyses/, Table 2v2+3 port) safe to publish on the public GitHub repo at junjslee/neonatal-ai-reliability?",
+  "timestamp": "2026-05-23T22:15:00Z",
+  "core_question": "Does the public README, CITATION.cff, and reader_study_full_analysis.py now match the round-1 manuscript at npj Digital Medicine in every claim, statistic, row label, and author attribution, so the public repo can be pushed without surfacing retracted numbers to reviewers or readers?",
   "knowns": [
-    "All four files I authored live under quantitative_analysis/revision_analyses/ which is inside the tracked public tree, not under /_archive/ or /docs/ (both gitignored).",
-    "git check-ignore confirms /_archive/, /docs/, AGENTS.md, CLAUDE.md, *.tiff, *.tif, *.csv, *.docx, *.xlsx remain ignored; the figures committed publicly are PNGs only (rdino model_arch.png, reader_study_diagram.png).",
-    "README cell descriptives (10.0/5.4 s for Neonatologists etc.) reduce algebraically to the per-reliability weighted average of revision_outputs cell means; not invented numbers.",
-    "Revision scripts read raw data via $RS_DATA_CSV — repo carries methodology code only, no reader-level CSV ships.",
-    "ast.parse succeeded on the modified reader_study_full_analysis.py (3385 lines) and on all three new revision_analyses scripts.",
-    "Diff vs internal reader_study_full_pipeline.py is now 4 cosmetic comment differences (SET B ↔ aidedsetonly) plus one deliberately-skipped WIP line that would have created a half-populated Accuracy column in v1 Table 2.",
-    "git push reported '2be8e35..3e800a4 main -> main' with no rejection; post-push status shows local main == origin/main."
+    "Manuscript, supplement, and 15-page author response are now readable at research_paper_ref/ (gitignored, line 1 of .gitignore).",
+    "The author response (Reviewer 2 Comment 7) explicitly retracts the absolute +1.2 / +3.1 / +4.6 s reading-time deltas as a technical error not reproducible from the analytic dataset; the manuscript text replaces them with multiplicative slowdowns (1.77x / 1.95x / 1.49x) and 'between-group differential operationally negligible' framing.",
+    "Manuscript abstract uses 'three participating neonatologists ... 91.7% (Wilson 95% CI 83.0-96.0%) ... hypothesis-generating ... warrants prospective replication.'",
+    "Manuscript saliency-map subsection uses '15/15; Wilson 95% CI 79.6-100%; descriptive observation.'",
+    "Manuscript Table 3 labels rows as 'Pediatric Radiologist x Reliable AI' etc., not 'Main Effect.'",
+    "Manuscript lists 19 authors with Namkug Kim (PhD) and Hee Mang Yoon (MD, PhD) as co-corresponding (asterisk in author list).",
+    "Local ast.parse succeeds on the modified reader_study_full_analysis.py (3385 lines).",
+    "All four touched files are publicly-tracked; /_archive/, /docs/, AGENTS.md, CLAUDE.md, *.tiff, *.tif, *.csv, *.docx, *.xlsx remain gitignored."
   ],
   "unknowns": [
-    "Whether Table 3 term-label strings (e.g., 'Interaction: Reliable AI × Neonatologist') match the exact wording the manuscript's Table 3 caption uses — manuscript docx still not copied to /tmp, so I cannot cross-check verbatim.",
-    "Whether the LMM headline numbers in README §5 (β=0.892 main, β=-0.610 interaction) survived any wording or model-spec adjustment between the revision_outputs snapshot (2026-04-25) and the version currently sitting in the OneDrive manuscript file.",
-    "Whether the round-1 reviewer reply letter cites a different set of statistics than what I propagated into the public README — I only saw the analysis outputs, not the reply letter."
+    "Whether the manuscript's exact unicode characters (em-dash, en-dash, multiplication sign) survived pandoc conversion and my edits without mojibake — should verify after push by rendering README.md on github.com.",
+    "Whether any author affiliation in CITATION.cff diverges from the manuscript's affiliation block (I copied them faithfully but did not verify them character-for-character against the docx).",
+    "Whether the npj Digital Medicine CITATION.cff schema accepts 'co-corresponding' inline annotation or expects a different field — CFF 1.2.0 does not have an explicit corresponding-author field; I encoded it via the notes field.",
+    "Whether the manuscript's Table 3 row order matches my term_map dict iteration order under pymer4 (pymer4 returns coefs in the order R's glmer reports them, which I have not pinned)."
   ],
   "assumptions": [
-    "The auto-checkpoint git hook committed exactly the files I staged with git add (no sweep of untracked sibling files) — verified by git show --stat HEAD showing only the reader_study_full_analysis.py line addition I intended.",
-    "Pushing intermediate chkpt commits to origin/main is consistent with the operator's existing pattern (prior origin history shows interleaved chkpt + conventional commits), so squashing was not required.",
-    "The line-2999 WIP I skipped was incomplete code (its comment 'No CI for single model usually, or bootstrap it' implies the author hadn't decided); skipping it does not regress functionality because the v2 Refined Table 2 handles Accuracy properly."
+    "The CFF preferred-citation block's 'authors' field with full affiliation strings is the right CFF-1.2.0-compliant way to represent a 19-author paper with two co-corresponding authors; CITATION.cff parsers (Zenodo, GitHub) will accept it without crashing.",
+    "Removing the retracted +1.2 / +3.1 / +4.6 s line from public README does not require coordinating with co-authors because the manuscript already retracted them; public README must not lead reviewers to numbers the authors disowned.",
+    "The line-2999 WIP I skipped in the earlier port remains correctly skipped; nothing in the round-1 author response references that v1 Table 2 Accuracy column.",
+    "Auto-checkpoint hook will batch the three modified files (CITATION.cff, README.md, reader_study_full_analysis.py) into one or two chkpt commits when the bash command exits, matching the pattern observed in commits 5aa4ca9 and 3e800a4 earlier in this session."
   ],
-  "disconfirmation": "If browsing https://github.com/junjslee/neonatal-ai-reliability after the push reveals any of: (a) a .tiff or .tif file in /figures/, (b) any content from /_archive/, (c) a Co-Authored-By trailer in commits 5aa4ca9 or 3e800a4, (d) reader-level data CSVs in /quantitative_analysis/ — the publish-safety audit was wrong and the affected commits must be reverted before downstream readers cache them."
+  "disconfirmation": "Push is unsafe if any of the following is observed AFTER push lands on origin/main: (a) the string '+4.6 s' or '+3.1 s' or '+1.2 s' is still in README.md on github.com; (b) the CITATION.cff renders with fewer than 19 authors in GitHub's right-rail 'Cite this repository' widget; (c) the manuscript Table 3 row labels and the public reader_study_full_analysis.py term_map disagree on the 6 condition/group/interaction labels; (d) any TIFF, raw CSV, _archive/ content, or Co-Authored-By trailer surfaces on github.com.",
+  "flaw_classification": "doc-code-drift",
+  "posture_selected": "patch",
+  "patch_vs_refactor_evaluation": "Patch is correct: (1) Each drift is independent and locally fixable. (2) The analysis code (LMM coefficient extraction, Wilson CI computation, GLMM term ordering) is already correct in the public pipeline — no behavior change is needed. (3) A refactor that, for instance, generated the README's per-table numbers programmatically from the analysis script would couple two artifacts that have legitimately different audiences (README = narrative, CSV = data); the right boundary is the patch layer where the author-facing manuscript and the public README are kept in sync by review, not by code generation. (4) The blast radius of a patch is bounded to exactly the strings changed; a refactor would expand the radius unnecessarily right before push.",
+  "blast_radius_map": [
+    {"surface": "README.md (public landing page)", "audience": "reviewers and external readers via github.com/junjslee/neonatal-ai-reliability", "consequence": "Abstract paragraph and sections 4-7 numerical tables are the first thing seen; incorrect numbers here directly mislead the public audience.", "status": "needs_update"},
+    {"surface": "CITATION.cff", "audience": "GitHub 'Cite this repository' widget and Zenodo on release tagging", "consequence": "Author list errors propagate into archived metadata that is hard to retract once cached.", "status": "needs_update"},
+    {"surface": "quantitative_analysis/reader_study_full_analysis.py Table 3 term_map", "audience": "reviewers verifying reproducibility against manuscript Table 3", "consequence": "Label drift surfaces as a visible mismatch during side-by-side review of the generated CSV vs the manuscript table.", "status": "needs_update"},
+    {"surface": "docs/PROGRESS.md and docs/NEXT_STEPS.md", "audience": "future agent sessions (gitignored, not public)", "consequence": "Stale notes could let a later agent reintroduce the retracted +1.2/+3.1/+4.6 s values; mitigation is the explicit retraction note added this turn.", "status": "needs_update"},
+    {"surface": "downstream consumers (other scripts, CI, package installs)", "audience": "none in this repo", "consequence": "Zero — no integration test regression risk; the changed lines are presentation-layer strings.", "status": "not-applicable"}
+  ],
+  "sync_plan": [
+    "Stage README.md + CITATION.cff + quantitative_analysis/reader_study_full_analysis.py + quantitative_analysis/revision_analyses/README.md and rely on the auto-checkpoint hook to commit.",
+    "Hook creates one or two chkpt commits on local main; push the resulting head plus the earlier-session chkpt that has not yet shipped (5efa600) to origin/main.",
+    "Verify post-push by listing origin/main commits and confirming the four files appear in HEAD's diff stat.",
+    "docs/PROGRESS.md and docs/NEXT_STEPS.md already updated in this turn — no further doc sync needed.",
+    "The .episteme/reasoning-surface.json local-only edit stays untouched (path is under .episteme/ which is local-only state)."
+  ],
+  "deferred_discoveries": [
+    "revision_analyses/r2_8_error_type_stratification.py prose draft names the supp figure 'Supplementary Figure SX'; manuscript actually labels it 'Supplementary Fig. 9'. Cosmetic, low impact — script is for the data owner's rebuttal letter, not public-facing.",
+    "docs/PLAN.md was last touched 2026-05-23 early in this session and was not re-synced in the second pass.",
+    "Korean Neonatal Network NEC stats (6.8% / 53% / 9.3% / 20-30%) and the Zapotoczny FDA-AI reference are in the manuscript Introduction but NOT in the public README's 'Why This Matters' section. Adding them would deepen public framing; non-blocking.",
+    "CITATION.cff under CFF 1.2.0 has no explicit corresponding-author field; co-corresponding annotation lives in the 'notes' field, which some parsers (e.g., GitHub's widget) may not surface.",
+    "Author affiliations in CITATION.cff were copied faithfully from the manuscript but not verified character-for-character; minor typos could exist."
+  ]
 }
