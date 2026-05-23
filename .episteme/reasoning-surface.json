@@ -1,22 +1,24 @@
 {
-  "timestamp": "2026-04-25T02:39:18Z",
-  "core_question": "Should we install firthlogist to provide a Firth-penalized robustness check for the R2-8 error-type GLMM, given that the FN-cell GLMM coefficients showed near-complete separation (SE ~ 85, OR confidence interval spanning 1e64)?",
+  "timestamp": "2026-05-23T22:00:00Z",
+  "core_question": "Is the npj DM round-1 revision update (README, CITATION.cff, revision_analyses/, Table 2v2+3 port) safe to publish on the public GitHub repo at junjslee/neonatal-ai-reliability?",
   "knowns": [
-    "GLMM converged but FN-related coefficients show classical complete-separation symptoms: error_type1 beta = -18.22, SE = 84.66, group2:error_type1 beta = +17.99, SE = 84.66",
-    "Cross-tab confirms zero-event cells: Pediatric Radiologist FN 0/36, Neonatologist FN 0/18 — the source of separation",
-    "Firth penalized logistic regression handles complete separation by adding a small penalty term to the score function, producing finite estimates",
-    "firthlogist 0.x is a pure-Python package on PyPI with numpy/scipy dependencies only — no compiled extension to break under numpy 2.x"
+    "All four files I authored live under quantitative_analysis/revision_analyses/ which is inside the tracked public tree, not under /_archive/ or /docs/ (both gitignored).",
+    "git check-ignore confirms /_archive/, /docs/, AGENTS.md, CLAUDE.md, *.tiff, *.tif, *.csv, *.docx, *.xlsx remain ignored; the figures committed publicly are PNGs only (rdino model_arch.png, reader_study_diagram.png).",
+    "README cell descriptives (10.0/5.4 s for Neonatologists etc.) reduce algebraically to the per-reliability weighted average of revision_outputs cell means; not invented numbers.",
+    "Revision scripts read raw data via $RS_DATA_CSV — repo carries methodology code only, no reader-level CSV ships.",
+    "ast.parse succeeded on the modified reader_study_full_analysis.py (3385 lines) and on all three new revision_analyses scripts.",
+    "Diff vs internal reader_study_full_pipeline.py is now 4 cosmetic comment differences (SET B ↔ aidedsetonly) plus one deliberately-skipped WIP line that would have created a half-populated Accuracy column in v1 Table 2.",
+    "git push reported '2be8e35..3e800a4 main -> main' with no rejection; post-push status shows local main == origin/main."
   ],
   "unknowns": [
-    "If pip install firthlogist exits non-zero or produces stderr ImportError on `import firthlogist`, the package install failed and we report descriptive Wilson CIs only without Firth"
+    "Whether Table 3 term-label strings (e.g., 'Interaction: Reliable AI × Neonatologist') match the exact wording the manuscript's Table 3 caption uses — manuscript docx still not copied to /tmp, so I cannot cross-check verbatim.",
+    "Whether the LMM headline numbers in README §5 (β=0.892 main, β=-0.610 interaction) survived any wording or model-spec adjustment between the revision_outputs snapshot (2026-04-25) and the version currently sitting in the OneDrive manuscript file.",
+    "Whether the round-1 reviewer reply letter cites a different set of statistics than what I propagated into the public README — I only saw the analysis outputs, not the reply letter."
   ],
   "assumptions": [
-    "firthlogist installs cleanly on numpy 2.2.6 since its setup.py declares numpy>=1.18 with no upper pin",
-    "the firthlogist API surface (FirthLogisticRegression with .fit/.coef_/.bse_/.ci_/.pvalues_) is stable across recent versions"
+    "The auto-checkpoint git hook committed exactly the files I staged with git add (no sweep of untracked sibling files) — verified by git show --stat HEAD showing only the reader_study_full_analysis.py line addition I intended.",
+    "Pushing intermediate chkpt commits to origin/main is consistent with the operator's existing pattern (prior origin history shows interleaved chkpt + conventional commits), so squashing was not required.",
+    "The line-2999 WIP I skipped was incomplete code (its comment 'No CI for single model usually, or bootstrap it' implies the author hadn't decided); skipping it does not regress functionality because the v2 Refined Table 2 handles Accuracy properly."
   ],
-  "disconfirmation": "If `python -c \"import firthlogist; m = firthlogist.FirthLogisticRegression(); print('ok')\"` exits non-zero or stderr shows ImportError after install, abandon Firth and document the GLMM separation in the prose draft instead.",
-  "verification_trace": {
-    "command": "conda run -n base python -c \"import firthlogist; m = firthlogist.FirthLogisticRegression(); print('ok')\"",
-    "threshold_observable": "exit code == 0 within 30 seconds"
-  }
+  "disconfirmation": "If browsing https://github.com/junjslee/neonatal-ai-reliability after the push reveals any of: (a) a .tiff or .tif file in /figures/, (b) any content from /_archive/, (c) a Co-Authored-By trailer in commits 5aa4ca9 or 3e800a4, (d) reader-level data CSVs in /quantitative_analysis/ — the publish-safety audit was wrong and the affected commits must be reverted before downstream readers cache them."
 }
