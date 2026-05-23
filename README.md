@@ -1,11 +1,12 @@
 # Expertise modulates automation bias and sentinel behavior in human-AI collaborative diagnosis of neonatal pneumoperitoneum
 
-[![Status](https://img.shields.io/badge/Status-Under_Review-yellow)]()
+[![Status](https://img.shields.io/badge/Status-In_Revision-orange)]()
+[![Venue](https://img.shields.io/badge/Venue-npj_Digital_Medicine-blueviolet)]()
 [![Study Design](https://img.shields.io/badge/Study-MRMC_Crossover-blue)]()
 [![Analysis](https://img.shields.io/badge/Statistics-GLMM_Crossed_Random_Effects-green)]()
 [![Educational Tool](https://img.shields.io/badge/Educational_Sandbox-Live-brightgreen)](https://neonatal-ai-sandbox.pages.dev/)
 
-**Lee et al.**
+**Lee et al.** — submitted to *npj Digital Medicine*; currently in revision (round 1).
 
 > **One-line takeaway:** *AI reliability does not translate linearly into clinical benefit.* In 1,750 interpretation events across a multi-reader multi-center crossover study, high AI reliability paradoxically induced **automation bias in trainees**, while error-prone AI triggered **sentinel (vigilant) behavior in experts** — demonstrating that adversarial resilience, not standalone accuracy, is the defining metric of human-AI team performance.
 
@@ -154,17 +155,61 @@ When the Error-Injected AI was wrong — rate at which readers successfully over
 
 ### 5. Verification Effort (Deliberation Time)
 
-Disagreement with AI triggered significantly longer deliberation across all groups (P<0.001):
+Reading time was modeled with a linear mixed-effects model on the aided set:
 
-| Group | Discordant (s) | Concordant (s) | Δ |
+```
+log(reading_time_sec) ~ disagree * reliability * group + pgy_within_5
+                       + (1 | reader) + (1 | case)
+```
+
+Headline fixed effects (REML, Satterthwaite df via lmerTest; full table in Supplementary Table 5):
+
+| Term | β (log s) | SE | t (df) | P | Time ratio (95% CI) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Discordance (main) | 0.892 | 0.174 | 5.12 (1043.0) | <0.001 | 2.44 (1.74–3.43) |
+| Discordance × Reliability[Unreliable] | -0.610 | 0.215 | -2.84 (948.6) | 0.005 | — |
+| Reliability[Unreliable] (main) | 0.172 | 0.131 | 1.32 (200.9) | 0.189 | — |
+
+Random-effect variances: σ²(reader)=0.096, σ²(case)=0.148, σ²(residual)=0.665.
+Marginal R²=0.101, Conditional R²=0.342 (Nakagawa–Schielzeth).
+
+Group-specific simple slopes (disagree vs agree, marginalized over reliability):
+
+| Group | Time ratio (disagree/agree) | 95% CI | P |
 | :--- | :--- | :--- | :--- |
-| **Neonatologists** | 10.0 | 5.4 | **+4.6s** |
-| Radiology Residents | — | — | +3.1s |
-| Pediatric Radiologists | — | — | +1.2s |
+| Pediatric Radiologists | 1.77× | 1.44–2.18 | <0.001 |
+| Neonatologists | 1.95× | 1.46–2.59 | <0.001 |
+| Radiology Residents | 1.49× | 1.18–1.88 | <0.001 |
 
-Neonatologists' twofold time increase reflects a shift from automatic (System 1) to analytical (System 2) verification — consistent with cognitive forcing triggered by clinically implausible AI outputs.
+> Per-group cell means (raw seconds, aggregated over reliability) — Neonatologists: 10.0 s discordant / 5.4 s concordant (+4.6 s); Radiology Residents +3.1 s; Pediatric Radiologists +1.2 s. Each group individually shows a significant disagree-vs-agree slowdown.
 
-### 6. Saliency Map Usage
+> **Statistical caveat (added in revision):** the omnibus disagree × group interaction was not significant (F(2, 1096.3)=1.32, P=0.267) — the model does not provide evidence that the *magnitude* of the slowdown differs across groups. The Neonatologist time pattern is therefore interpreted as descriptive evidence of System 2 verification within that group, not as a statistically distinct between-group effect.
+
+### 6. Error-Type Stratification (Error-Injected AI arm; added in revision)
+
+The Error-Injected AI was wrong on **18 unique false-positive (FP)** and **6 unique false-negative (FN)** cases (336 reader-case rows across the 14 readers in the aided arm). Agreement with the wrong AI, stratified:
+
+| Group | FP rate (n agreed / n) | FN rate (n agreed / n) | FP→FN drop |
+| :--- | :--- | :--- | :--- |
+| Pediatric Radiologists | 19.4% (21/108) | **0.0%** (0/36) | -19.4 pp |
+| Neonatologists | 11.1% (6/54) | **0.0%** (0/18) | -11.1 pp |
+| **Radiology Residents** | 18.9% (17/90) | **16.7%** (5/30) | **-2.2 pp** |
+
+Wilson 95% CIs and full counts in `quantitative_analysis/revision_analyses/r2_8_error_type_stratification.py`.
+
+The conventional GLMM (`agree_with_ai ~ group * error_type + (1|reader) + (1|case)`) converged but exhibited **practical separation** in the FN cell (two of three groups had zero events). We therefore report Firth penalized logistic regression as the primary inferential model:
+
+| Term | OR | 95% CI | P (Firth penalized LRT) |
+| :--- | :--- | :--- | :--- |
+| **error_type[FN]** (Ped Rad ref) | **0.06** | 0.00–0.42 | **0.001** |
+| group[Radiology Resident] × error_type[FN] | **16.25** | 1.51–2239 | **0.017** |
+| group[Neonatologist] × error_type[FN] | 3.62 | 0.02–721 | 0.54 |
+
+Pediatric Radiologists and Neonatologists overrode every FN case. Residents accepted the AI's "all clear" verdict on 5/30 FN reader-case rows — the FP-to-FN drop is largely absent in trainees, suggesting that the FN cases are precisely where novice over-reliance is most clinically dangerous.
+
+> **Exploratory caveat:** only 6 unique FN cases are shared across all 14 readers; the Resident × FN interaction CI spans 1.5 to 2239, directionally informative but with wide uncertainty.
+
+### 7. Saliency Map Usage
 
 | Group | Usage Rate (AI-incorrect cases) | Accuracy with Map | Interpretation |
 | :--- | :--- | :--- | :--- |
@@ -195,6 +240,8 @@ Experts used explainability maps selectively to *refute* the AI; trainees used t
 
 - **Source code** (preprocessing, model, training, evaluation, saliency, statistical analysis): [github.com/junjslee/neonatal-ai-reliability](https://github.com/junjslee/neonatal-ai-reliability)
 - **Educational sandbox:** [neonatal-ai-sandbox.pages.dev](https://neonatal-ai-sandbox.pages.dev/)
+- **Primary statistical pipeline:** `quantitative_analysis/reader_study_full_analysis.py` — GLMM crossed random effects, GEE sensitivity, time/CAM mechanism analyses, HCI-type stacked bars (Type 1–4 derivation including the **Type 4 automation-bias** and **Type 3 sentinel-override** counts that underlie §3–§4).
+- **Revision-round analyses:** `quantitative_analysis/revision_analyses/` — R2-6 (reading-time LMM full output), R2-7 (between-group differential omnibus + simple slopes), R2-8 (FP-vs-FN error-type stratification with Firth sensitivity).
 - **Model checkpoints:** Both the Reliable AI and Error-Injected AI weights are included in this repository under `quantitative_analysis/standalone_model_performance/rad_dino/`. These are the exact checkpoints used in the reader study and can be used to reproduce inference results without retraining. Weights are derived from [microsoft/rad-dino](https://huggingface.co/microsoft/rad-dino) (MIT License, research use only — not for clinical practice).
 - **Raw image data:** Cannot be publicly redistributed (IRB/licensing); external validation set available via [AI-Hub](https://www.aihub.or.kr/)
 - **De-identified derived data** (reader metrics, AI predictions, consensus labels): Available upon request to corresponding authors
@@ -205,7 +252,9 @@ Experts used explainability maps selectively to *refute* the AI; trainees used t
 
 If you use the code, findings, or the error-injection validation framework, please cite:
 
-> Lee J, Kim Y, Kim V, Park C, et al. *Expertise modulates automation bias and sentinel behavior in human-AI collaborative diagnosis of neonatal pneumoperitoneum.* (Under Review, 2026)
+> Lee, J. *et al.* Expertise modulates automation bias and sentinel behavior in human-AI collaborative diagnosis of neonatal pneumoperitoneum. *npj Digit. Med.* (in revision, 2026).
+
+Machine-readable metadata: see [`CITATION.cff`](CITATION.cff). A final BibTeX entry will be added on acceptance.
 
 ---
 

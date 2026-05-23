@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use this code, findings, or error-injection framework, please cite the paper below."
+message: "If you use this code, findings, or the error-injection validation framework, please cite the paper below."
 title: "neonatal-ai-reliability"
 type: software
 authors:
@@ -20,6 +20,8 @@ keywords:
   - radiology
   - MRMC
   - GLMM
+  - RAD-DINO
+  - LoRA
 
 preferred-citation:
   type: article
@@ -27,5 +29,7 @@ preferred-citation:
   authors:
     - family-names: Lee
       given-names: Junseong
+    - name: "et al."
   year: 2026
-  notes: "Under review"
+  journal: "npj Digital Medicine"
+  notes: "In revision (round 1). Full author list and DOI will be added on acceptance."
