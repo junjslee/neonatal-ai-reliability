@@ -3191,5 +3191,196 @@ for ax in g.axes.flat:
 savefig("Figure_S7_CAM_Mechanism_Large.tif")
 
 
+# ==========================================================
+# REFINED TABLE 3: HYBRID GLMM REPORT (Beta + OR)
+# ==========================================================
+# Ported from the internal pipeline (reader_study_full_pipeline.py) so the
+# manuscript-ready Table 3 is reproducible from the public script. Builds on
+# the already-fitted `glmm_model` (primary GLMM, crossed reader/case RE).
+print("\n[REQ] Generating Refined Table 3 (Hybrid GLMM Report)...")
+
+coefs_raw = glmm_model.coefs.copy()
+
+# Mapping from raw pymer4 term names to manuscript-facing labels.
+term_map = {
+    "(Intercept)": "Intercept (Baseline: Ped Rad, Unaided)",
+    "condition1": "Condition: Reliable AI (Main Effect)",
+    "condition2": "Condition: Error-Injected AI (Main Effect)",
+    "group1": "Group: Neonatologist (Main Effect)",
+    "group2": "Group: Radiology Resident (Main Effect)",
+    "pgy_within_5": "Clinical Experience (Scaled)",
+    "condition1:group1": "Interaction: Reliable AI × Neonatologist",
+    "condition2:group1": "Interaction: Error-Injected AI × Neonatologist",
+    "condition1:group2": "Interaction: Reliable AI × Resident",
+    "condition2:group2": "Interaction: Error-Injected AI × Resident",
+    "ga_z": "Gestational Age (z-score)",
+    "bw_z": "Birth Weight (z-score)",
+}
+
+hybrid_table = coefs_raw.reset_index().rename(columns={"index": "Raw_Term"})
+hybrid_table["Parameter"] = hybrid_table["Raw_Term"].map(term_map).fillna(hybrid_table["Raw_Term"])
+
+# Filter only the rows present in the term map (drops random nuisance terms).
+keep_mask = hybrid_table["Parameter"].isin(term_map.values())
+hybrid_table = hybrid_table[keep_mask].copy()
+
+# Coefficient (SE) on log-odds scale.
+hybrid_table["Coefficient (SE)"] = hybrid_table.apply(
+    lambda x: f"{x['Estimate']:.2f} ({x['SE']:.2f})", axis=1
+)
+
+# Odds Ratio with 95% CI — exponentiate the log-odds estimate and its CI.
+hybrid_table["OR"] = np.exp(hybrid_table["Estimate"])
+hybrid_table["OR_Lower"] = np.exp(hybrid_table["2.5_ci"])
+hybrid_table["OR_Upper"] = np.exp(hybrid_table["97.5_ci"])
+
+hybrid_table["Odds Ratio (95% CI)"] = hybrid_table.apply(
+    lambda x: f"{x['OR']:.2f} ({x['OR_Lower']:.2f}–{x['OR_Upper']:.2f})", axis=1
+)
+
+hybrid_table["P-value"] = hybrid_table["P-val"].apply(
+    lambda p: "<0.001" if p < 0.001 else f"{p:.3f}"
+)
+
+final_table3 = hybrid_table[["Parameter", "Coefficient (SE)", "Odds Ratio (95% CI)", "P-value"]]
+final_table3.to_csv(os.path.join(OUTDIR, "Table3_GLMM_Refined.csv"), index=False)
+print("Saved Table3_GLMM_Refined.csv")
+
+# --- PRE-REQUISITE: Reader demographics for the merged Table 2 ---
+reader_demo = df[["group", "reader", "pgy"]].drop_duplicates()
+demo_stats = reader_demo.groupby("group").agg(
+    N_Readers=("reader", "nunique"),
+    Experience_Mean=("pgy", "mean"),
+    Experience_SD=("pgy", "std"),
+).reset_index()
+
+demo_stats["Experience (Years)"] = demo_stats.apply(
+    lambda x: f"{x['Experience_Mean']:.1f} ± {x['Experience_SD']:.1f}" if pd.notna(x['Experience_SD']) else f"{x['Experience_Mean']:.1f}",
+    axis=1,
+)
+
+
+# ==========================================================
+# REFINED TABLE 2: CONSOLIDATED PERFORMANCE (ALL WITH CIs)
+# ==========================================================
+# Manuscript-ready Table 2. Differs from the earlier `Table2_Diagnostic_Performance.csv`
+# by adding Accuracy with 95% CI for both humans and AI, bootstrap CIs on every
+# AI metric (not just AUC), and the reader-group demographic columns. Ported
+# from the internal pipeline so manuscript and public output match exactly.
+print("\n[REQ] Generating Refined Table 2 (Complete Metrics with CIs)...")
+
+# --- A. HUMAN READERS (Aggregate Reader Metrics) ---
+reader_metrics_final = []
+for (grp, cond, rdr), sub in df.groupby(["group", "condition", "reader"]):
+    m = sens_spec_acc(sub["y_true"], sub["reader_pred"])
+    binary_auc = (m["sens"] + m["spec"]) / 2.0
+    reader_metrics_final.append({
+        "group": grp, "condition": cond, "auc": binary_auc,
+        "acc": m["acc"], "sens": m["sens"], "spec": m["spec"],
+    })
+df_rdr_final = pd.DataFrame(reader_metrics_final)
+
+human_rows_final = []
+for (grp, cond), sub in df_rdr_final.groupby(["group", "condition"]):
+    n_r = len(sub)
+    stats = {}
+    for metric in ["auc", "acc", "sens", "spec"]:
+        mean_val = sub[metric].mean()
+        sem_val = sub[metric].sem()
+
+        # 95% CI across readers using the t-distribution.
+        if n_r > 1:
+            ci = st.t.interval(0.95, df=n_r - 1, loc=mean_val, scale=sem_val)
+        else:
+            ci = (np.nan, np.nan)
+
+        # Probabilities are bounded on [0, 1]; clip the CI to that range.
+        low = max(0, ci[0])
+        high = min(1, ci[1])
+
+        if metric in ["auc", "acc"]:
+            stats[metric] = f"{mean_val:.2f} ({low:.2f}–{high:.2f})"
+        else:
+            stats[metric] = f"{mean_val * 100:.1f} ({low * 100:.1f}–{high * 100:.1f})"
+
+    human_rows_final.append({
+        "Reader Group": grp, "Condition": cond,
+        "AUC (95% CI)": stats["auc"],
+        "Accuracy (95% CI)": stats["acc"],
+        "Sensitivity (95% CI)": stats["sens"],
+        "Specificity (95% CI)": stats["spec"],
+    })
+
+# --- B. AI MODELS (Case bootstrap for every binary metric) ---
+ai_rows_final = []
+ai_df = df.drop_duplicates(subset=["filename"])
+
+
+def get_binary_metrics(yt, yp):
+    ybin = (yp >= 0.5).astype(int)
+    m = sens_spec_acc(yt, ybin)
+    return m["acc"], m["sens"], m["spec"]
+
+
+for config in ai_configs:
+    valid = ai_df.dropna(subset=["y_true", config["prob"]])
+    yt = valid["y_true"].values
+    yp = valid[config["prob"]].values
+
+    # Bootstrap AUC.
+    auc_val = roc_auc_score(yt, yp)
+    auc_ci = get_ai_bootstrap_ci(yt, yp, roc_auc_score)
+
+    # Bootstrap Acc/Sens/Spec on the same resampling indices so they stay paired.
+    acc_list, sens_list, spec_list = [], [], []
+    rng = np.random.default_rng(42)
+    for _ in range(2000):
+        idx = rng.choice(len(yt), size=len(yt), replace=True)
+        t_b, p_b = yt[idx], yp[idx]
+        if len(np.unique(t_b)) < 2:
+            continue
+        a, s, sp = get_binary_metrics(t_b, p_b)
+        acc_list.append(a); sens_list.append(s); spec_list.append(sp)
+
+    m_bin = get_binary_metrics(yt, yp)  # Point estimate on the full sample.
+    ai_stats_formatted = {"auc": f"{auc_val:.2f} ({auc_ci[0]:.2f}–{auc_ci[1]:.2f})"}
+    for i, (metric, vals) in enumerate(zip(["acc", "sens", "spec"], [acc_list, sens_list, spec_list])):
+        low, high = np.percentile(vals, 2.5), np.percentile(vals, 97.5)
+        if metric == "acc":
+            ai_stats_formatted[metric] = f"{m_bin[i]:.2f} ({low:.2f}–{high:.2f})"
+        else:
+            ai_stats_formatted[metric] = f"{m_bin[i] * 100:.1f} ({low * 100:.1f}–{high * 100:.1f})"
+
+    ai_rows_final.append({
+        "Reader Group": "AI Model Alone",
+        "Condition": config["name"],
+        "AUC (95% CI)": ai_stats_formatted["auc"],
+        "Accuracy (95% CI)": ai_stats_formatted["acc"],
+        "Sensitivity (95% CI)": ai_stats_formatted["sens"],
+        "Specificity (95% CI)": ai_stats_formatted["spec"],
+    })
+
+# --- C. FINAL MERGE & SORT ---
+final_table2 = pd.concat([pd.DataFrame(human_rows_final), pd.DataFrame(ai_rows_final)], ignore_index=True)
+final_table2["Condition"] = final_table2["Condition"].replace(cond_map)
+
+# Bring in N readers + Experience for the human rows (AI row stays NaN there).
+final_table2 = pd.merge(
+    final_table2,
+    demo_stats[["group", "N_Readers", "Experience (Years)"]],
+    left_on="Reader Group", right_on="group", how="left",
+).drop(columns=["group"])
+
+col_order = ["Reader Group", "N_Readers", "Experience (Years)", "Condition",
+             "AUC (95% CI)", "Accuracy (95% CI)", "Sensitivity (95% CI)", "Specificity (95% CI)"]
+final_table2 = final_table2[col_order]
+
+final_table2["Reader Group"] = pd.Categorical(final_table2["Reader Group"], categories=grp_order, ordered=True)
+final_table2 = final_table2.sort_values(["Reader Group", "Condition"])
+
+final_table2.to_csv(os.path.join(OUTDIR, "Table2_Consolidated_Refined_Full_CIs.csv"), index=False)
+print("Saved Table2_Consolidated_Refined_Full_CIs.csv")
+
+
 print("\nDONE.")
 print("Outputs saved to:", os.path.abspath(OUTDIR))
