@@ -1,9 +1,26 @@
 # Revision-round analyses
 
-Scripts that produce the additional statistics added during the round-1
-revision at *npj Digital Medicine*. Each script is self-contained, reads its
-input from a CSV (path supplied via environment variable), and writes its
-output next to itself.
+Scripts that produce the **additional** statistics added during the round-1
+revision at *npj Digital Medicine* — not produced by the primary pipeline
+(`../reader_study_full_analysis.py`). Each script is self-contained, reads
+its input from a CSV (path supplied via environment variable), and writes
+its output next to itself.
+
+## Why a separate folder
+
+`reader_study_full_analysis.py` mirrors the internal pipeline
+(`_archive/reader_study_results/reader_study_full_pipeline.py`, gitignored)
+and produces the manuscript's main-text Tables 2-3 and Figures 1-5. The
+round-1 revision added three further analyses (R2-6 LMM full output, R2-7
+between-group differential, R2-8 FP-vs-FN stratification) that the primary
+pipeline does not compute. These live here so they remain visible to
+reviewers without bloating the primary script.
+
+| Public path (this dir) | Internal path (gitignored) | What it produces |
+|---|---|---|
+| `r2_6_reading_time_lmm.py` | `_archive/reader_study_results/revision_outputs/r2_6_reading_time_lmm_full.py` | Supplementary Table 5 |
+| `r2_7_between_group_differential.py` | `_archive/reader_study_results/revision_outputs/r2_7_between_group_differential.py` | Omnibus F + Tukey contrasts on the disagree-slope |
+| `r2_8_error_type_stratification.py` | `_archive/reader_study_results/revision_outputs/r2_8_error_type_stratification.py` | Supplementary Figure 9 + FP/FN crosstab + Firth sensitivity |
 
 | Script | Reviewer comment | What it produces |
 |---|---|---|

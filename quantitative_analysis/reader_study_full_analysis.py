@@ -3201,20 +3201,24 @@ print("\n[REQ] Generating Refined Table 3 (Hybrid GLMM Report)...")
 
 coefs_raw = glmm_model.coefs.copy()
 
-# Mapping from raw pymer4 term names to manuscript-facing labels.
+# Mapping from raw pymer4 term names to manuscript Table 3 row labels.
+# Treatment contrasts: reference group = Pediatric Radiologist, reference condition = Unaided.
+# Under this coding, condition1 and condition2 are the Pediatric-Radiologist slope from Unaided
+# to Reliable AI and Error-Injected AI respectively; the condition:group product terms are
+# additive adjustments to that slope for Neonatologists / Residents.
 term_map = {
-    "(Intercept)": "Intercept (Baseline: Ped Rad, Unaided)",
-    "condition1": "Condition: Reliable AI (Main Effect)",
-    "condition2": "Condition: Error-Injected AI (Main Effect)",
-    "group1": "Group: Neonatologist (Main Effect)",
-    "group2": "Group: Radiology Resident (Main Effect)",
+    "(Intercept)": "Baseline Correctness (Pediatric Radiologist, Unaided)",
+    "group1": "Neonatologist (Baseline)",
+    "group2": "Radiology Resident (Baseline)",
     "pgy_within_5": "Clinical Experience (Scaled)",
-    "condition1:group1": "Interaction: Reliable AI × Neonatologist",
-    "condition2:group1": "Interaction: Error-Injected AI × Neonatologist",
-    "condition1:group2": "Interaction: Reliable AI × Resident",
-    "condition2:group2": "Interaction: Error-Injected AI × Resident",
     "ga_z": "Gestational Age (z-score)",
     "bw_z": "Birth Weight (z-score)",
+    "condition1": "Pediatric Radiologist × Reliable AI",
+    "condition2": "Pediatric Radiologist × Error-Injected AI",
+    "condition1:group1": "Neonatologist × Reliable AI",
+    "condition2:group1": "Neonatologist × Error-Injected AI",
+    "condition1:group2": "Radiology Resident × Reliable AI",
+    "condition2:group2": "Radiology Resident × Error-Injected AI",
 }
 
 hybrid_table = coefs_raw.reset_index().rename(columns={"index": "Raw_Term"})

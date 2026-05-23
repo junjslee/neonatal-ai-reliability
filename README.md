@@ -14,7 +14,7 @@
 
 ## Abstract
 
-Medical AI is often validated under an additive assumption that algorithmic sensitivity and clinician oversight will combine to improve care. We tested this assumption in the high-stakes diagnosis of neonatal pneumoperitoneum, a time-critical surgical emergency. In a multi-reader crossover study analyzing 1,750 interpretation events, clinicians reviewed radiographs aided by either a high-reliability model or a systematically error-injected model. We found that high AI reliability paradoxically induces automation bias in trainees, who accepted 52.0% of incorrect suggestions, while offering limited gains to experts. Conversely, when challenged by flawed AI, neonatologists demonstrated "sentinel behavior," correctly overriding 91.7% of errors consistent with increased deliberation. We operationalize systemic resilience as the capacity to maintain diagnostic integrity under algorithmic failure and demonstrate that clinical validity depends on the human-AI team's adversarial resilience rather than standalone accuracy. To mitigate the risk of deskilling and never-skilling, we release an open-source educational sandbox designed to inoculate clinicians against automated errors.
+Medical AI is often validated under an additive assumption that algorithmic sensitivity and clinician oversight will combine to improve care. We tested this assumption in the high-stakes diagnosis of neonatal pneumoperitoneum, a time-critical surgical emergency. In a multi-reader crossover study analyzing 1,750 interpretation events, clinicians reviewed radiographs aided by either a high-reliability model or a systematically error-injected model. We found that high AI reliability paradoxically induces automation bias in trainees, who accepted 52.0% of incorrect suggestions, while offering limited gains to experts. Conversely, when challenged by flawed AI, the three participating neonatologists exhibited a "sentinel behavior" phenotype, correctly overriding 91.7% of errors (Wilson 95% CI 83.0–96.0%) consistent with increased deliberation; given the small specialist cohort, this finding is hypothesis-generating and warrants prospective replication. We operationalize systemic resilience as the capacity to maintain diagnostic integrity under algorithmic failure and demonstrate that clinical validity depends on the human-AI team's adversarial resilience rather than standalone accuracy. To mitigate the risk of deskilling and never-skilling, we release an open-source educational sandbox designed to inoculate clinicians against automated errors.
 
 **Keywords:** Neonatal pneumoperitoneum · Automation bias · Sentinel behavior · Artificial intelligence · Deep learning · Multi-reader multi-case study · Human-AI interaction · Radiology
 
@@ -147,11 +147,13 @@ Residents vs Radiologists: P=0.016 (significant after Bonferroni correction).
 
 When the Error-Injected AI was wrong — rate at which readers successfully overrode it:
 
-| Group | Correct Override Rate |
-| :--- | :--- |
-| **Neonatologists** | **91.7% (66/72)** |
-| Pediatric Radiologists | 85.4% (123/144) |
-| Radiology Residents | 81.7% (98/120) |
+| Group | Correct Override Rate | Wilson 95% CI |
+| :--- | :--- | :--- |
+| **Neonatologists** | **91.7% (66/72)** | **83.0–96.0%** |
+| Pediatric Radiologists | 85.4% (123/144) | 78.6–90.4% |
+| Radiology Residents | 81.7% (98/120) | 73.8–87.6% |
+
+> The 91.7% neonatologist override rate comes from three participating specialists (75 reader-case rows on the Error-Injected arm) and is presented as a **hypothesis-generating** observation that warrants prospective replication in a larger specialist cohort.
 
 ### 5. Verification Effort (Deliberation Time)
 
@@ -181,9 +183,11 @@ Group-specific simple slopes (disagree vs agree, marginalized over reliability):
 | Neonatologists | 1.95× | 1.46–2.59 | <0.001 |
 | Radiology Residents | 1.49× | 1.18–1.88 | <0.001 |
 
-> Per-group cell means (raw seconds, aggregated over reliability) — Neonatologists: 10.0 s discordant / 5.4 s concordant (+4.6 s); Radiology Residents +3.1 s; Pediatric Radiologists +1.2 s. Each group individually shows a significant disagree-vs-agree slowdown.
+> **Statistical caveat (revised in round 1):** the omnibus disagree × group interaction was not significant (F(2, 1096)=1.32, P=0.267) — the model does not provide evidence that the *magnitude* of the slowdown differs across groups. We interpret the per-group multiplicative slowdowns as evidence that AI-induced verification effort imposed a similar workflow cost across expertise levels, with the between-group differential being operationally negligible.
+>
+> **Note on prior reporting:** an earlier draft summarized this analysis using absolute second-level differences (+1.2 / +3.1 / +4.6 s). Those raw second-level values were a technical error introduced during initial drafting and were not reproducible from the analytic dataset. They have been removed in favor of the model-adjusted multiplicative slowdowns above, which are traceable to Supplementary Table 5.
 
-> **Statistical caveat (added in revision):** the omnibus disagree × group interaction was not significant (F(2, 1096.3)=1.32, P=0.267) — the model does not provide evidence that the *magnitude* of the slowdown differs across groups. The Neonatologist time pattern is therefore interpreted as descriptive evidence of System 2 verification within that group, not as a statistically distinct between-group effect.
+> **Within-session trust recalibration.** The significant `Discordance × Reliability[Unreliable]` interaction (β=-0.610, P=0.005) indicates that on the log-time scale, the verification cost of disagreeing with the AI was substantially attenuated under the Error-Injected condition. Once readers encountered a low-reliability AI, the cognitive cost of rejecting its output decreased — consistent with empirical recalibration of trust during the session.
 
 ### 6. Error-Type Stratification (Error-Injected AI arm; added in revision)
 
@@ -215,7 +219,9 @@ Pediatric Radiologists and Neonatologists overrode every FN case. Residents acce
 | :--- | :--- | :--- | :--- |
 | Radiology Residents | 53.8% (78/145) | 78.2% (vs 73.1% without; P=0.61) | Confirmatory — reinforces over-reliance |
 | Pediatric Radiologists | 34.5% (60/174) | Trending lower (81.7% vs 86.0%; P=0.58) | Intermediate |
-| **Neonatologists** | **17.2% (15/87)** | **100% (15/15; exploratory)** | **Refutation utility** |
+| **Neonatologists** | **17.2% (15/87)** | **100% (15/15; Wilson 95% CI 79.6–100%)** | **Refutation utility (exploratory)** |
+
+> Neonatologist 100% accuracy is from 15 user-initiated map views and is presented as a **descriptive observation** — user-initiated access creates selection effects, and the wide Wilson CI (79.6–100%) reflects the limited subset.
 
 Experts used explainability maps selectively to *refute* the AI; trainees used them indiscriminately, often reinforcing over-reliance.
 
@@ -252,7 +258,9 @@ Experts used explainability maps selectively to *refute* the AI; trainees used t
 
 If you use the code, findings, or the error-injection validation framework, please cite:
 
-> Lee, J. *et al.* Expertise modulates automation bias and sentinel behavior in human-AI collaborative diagnosis of neonatal pneumoperitoneum. *npj Digit. Med.* (in revision, 2026).
+> Lee, J., Kim, Y., Kim, V., Park, C., Song, J. M., Kwon, J., Nam, Y., Lenehan, P., Kim, D. Y., Cho, Y. A., Kim, P. H., Hwang, J.-Y., Lee, J., Lee, B. S., Jung, E., Jung, A. Y., Choi, J., Kim, N.\* & Yoon, H. M.\* *Expertise modulates automation bias and sentinel behavior in human-AI collaborative diagnosis of neonatal pneumoperitoneum.* **npj Digit. Med.** (in revision, 2026).
+>
+> \*Co-corresponding authors: Namkug Kim, PhD (namkugkim@gmail.com); Hee Mang Yoon, MD, PhD (espoirhm@gmail.com).
 
 Machine-readable metadata: see [`CITATION.cff`](CITATION.cff). A final BibTeX entry will be added on acceptance.
 

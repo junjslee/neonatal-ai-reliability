@@ -29,7 +29,63 @@ preferred-citation:
   authors:
     - family-names: Lee
       given-names: Junseong
-    - name: "et al."
+      affiliation: "Department of Convergence Medicine, Asan Medical Center, University of Ulsan College of Medicine, Seoul, South Korea; University of Illinois Urbana-Champaign, Champaign, IL, USA"
+    - family-names: Kim
+      given-names: Yeonsu
+      affiliation: "Department of Convergence Medicine, Asan Medical Center; Department of Radiology, Samsung Changwon Hospital, Sungkyunkwan University School of Medicine, Changwon, South Korea"
+    - family-names: Kim
+      given-names: Victoria
+      affiliation: "University of Illinois Urbana-Champaign, Champaign, IL, USA"
+    - family-names: Park
+      given-names: Changhyun
+      affiliation: "Department of Convergence Medicine, Asan Medical Center; College of Medicine, Our Lady of Fatima University, Valenzuela City, Philippines"
+    - family-names: Song
+      given-names: Jeong Min
+      affiliation: "Department of Convergence Medicine, Asan Medical Center; Department of Radiology and Research Institute of Radiology, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea"
+    - family-names: Kwon
+      given-names: Jimin
+      affiliation: "Department of Radiology, Dankook University Hospital, Dankook University College of Medicine, Cheonan, South Korea"
+    - family-names: Nam
+      given-names: Yoojin
+      affiliation: "Department of Convergence Medicine, Asan Medical Center; Department of Radiology, Samsung Changwon Hospital, Sungkyunkwan University School of Medicine, Changwon, South Korea"
+    - family-names: Lenehan
+      given-names: Patrick
+      affiliation: "Massachusetts General Hospital, Harvard Medical School, Boston, MA, USA"
+    - family-names: Kim
+      given-names: Dong Yeong
+      affiliation: "Department of Convergence Medicine, Asan Medical Center; Department of Radiology and Research Institute of Radiology, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea"
+    - family-names: Cho
+      given-names: Young Ah
+      affiliation: "Department of Radiology and Research Institute of Radiology, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea"
+    - family-names: Kim
+      given-names: Pyeong Hwa
+      affiliation: "Department of Radiology and Research Institute of Radiology, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea"
+    - family-names: Hwang
+      given-names: Jae-Yeon
+      affiliation: "Department of Radiology, Seoul National University Hospital, Seoul, Republic of Korea"
+    - family-names: Lee
+      given-names: Jaeseong
+      affiliation: "Department of Electrical and Computer Engineering, University of Wisconsin-Madison, Madison, WI, USA"
+    - family-names: Lee
+      given-names: Byong Sop
+      affiliation: "Department of Pediatrics, Asan Medical Center Children's Hospital, University of Ulsan College of Medicine, Seoul, Republic of Korea"
+    - family-names: Jung
+      given-names: Euiseok
+      affiliation: "Department of Pediatrics, Asan Medical Center Children's Hospital, University of Ulsan College of Medicine, Seoul, Republic of Korea"
+    - family-names: Jung
+      given-names: Ah Young
+      affiliation: "Department of Radiology and Research Institute of Radiology, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea"
+    - family-names: Choi
+      given-names: Jinwha
+      affiliation: "Department of Pediatrics, Samsung Medical Center, Sungkyunkwan University School of Medicine, Seoul, Korea; Department of Biomedical Engineering, Asan Medical Institute of Convergence Science and Technology, Asan Medical Center, University of Ulsan College of Medicine, Seoul, South Korea"
+    - family-names: Kim
+      given-names: Namkug
+      affiliation: "Department of Convergence Medicine, Asan Medical Center, University of Ulsan College of Medicine; Department of Biomedical Engineering, Brain Korea 21 Project, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea"
+      email: namkugkim@gmail.com
+    - family-names: Yoon
+      given-names: Hee Mang
+      affiliation: "Department of Radiology and Research Institute of Radiology, University of Ulsan College of Medicine, Asan Medical Center, Seoul, South Korea; Massachusetts General Hospital, Harvard Medical School, Boston, MA, USA"
+      email: espoirhm@gmail.com
   year: 2026
   journal: "npj Digital Medicine"
-  notes: "In revision (round 1). Full author list and DOI will be added on acceptance."
+  notes: "In revision (round 1). Namkug Kim and Hee Mang Yoon are co-corresponding authors and contributed equally to this work. Final DOI will be added on acceptance."
